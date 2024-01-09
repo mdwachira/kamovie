@@ -1,0 +1,228 @@
+version: ${COMPOSE_VERSION}
+
+networks:
+  proxy:
+    name: proxy_network
+    external: true
+  download:
+    driver: bridge
+    name: torrent_network
+
+services:
+  qbittorrent:
+    image: "lscr.io/linuxserver/qbittorrent"
+    container_name: qbittorrent
+    hostname: qb.local
+    networks:
+      - download
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+      - WEBUI_PORT=8080
+    volumes:
+      - ${DOCKER_DIR}/download_stack/qbittorrent/data:/config
+      - ${DOWNLOAD_DIR}:/downloads
+    ports:
+      # - '8080:8080'
+      - '6881:6881'
+      - '6881:6881/udp'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.qbittorrent.rule=Host(`${SUB_DOMAIN_QBITTORENT}.${DOMAIN}`)"
+      - "traefik.http.routers.qbittorrent.tls.certresolver=letsencrypt"
+      - "traefik.http.services.qbittorrent.loadbalancer.server.port=8080"
+    restart: unless-stopped
+
+  # transmission:
+  #   image: "lscr.io/linuxserver/transmission"
+  #   container_name: transmission
+  #   hostname: tr.local
+  #   environment:
+  #     - PUID=${ENV_PUID}
+  #     - PGID=${ENV_PGID}
+  #     - TZ=${TIMEZONE}
+  #     - TRANSMISSION_WEB_HOME=/themes/flood
+  #     - USER=mdwachira
+  #     - PASS=p4s5w04d
+  #     # - WHITELIST= #optional
+  #     # - PEERPORT= #optional
+  #     - HOST_WHITELIST=sonarr.local,radarr.local
+  #   volumes:
+  #     - ${DOCKER_DIR}/download_stack/transmission/data:/config
+  #     - ${DOCKER_DIR}/download_stack/transmission/themes:/themes
+  #     - ${DOWNLOAD_DIR}:/downloads
+  #     - ${DOWNLOAD_DIR}/torrents:/watch
+  #   networks:
+  #     - download
+  #     - proxy
+  #   ports:
+  #     - '8082:9091'
+  #     - '51413:51413'
+  #     - '51413:51413/udp'
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.transmission.rule=Host(`${SUB_DOMAIN_TRANSMISSION}.${DOMAIN}`)"
+  #     - "traefik.http.services.transmission.loadbalancer.server.port=9091"
+  #     - "traefik.http.routers.transmission.tls.certresolver=letsencrypt"
+  #   restart: unless-stopped
+
+  radarr:
+    image: "lscr.io/linuxserver/radarr"
+    container_name: radarr
+    hostname: radarr.local
+    networks:
+      - proxy
+      - download
+    ports:
+      - '8081:7878'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/radarr:/config
+      - ${MEDIA_DIR}/movie:/media/movie #optional
+      - ${MEDIA_DIR}/documentary/movie:/media/documentary #optional
+      - ${DOWNLOAD_DIR}:/downloads #optional
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.radarr.rule=Host(`${SUB_DOMAIN_RADARR}.${DOMAIN}`)"
+      - "traefik.http.routers.radarr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.radarr.loadbalancer.server.port=7878"
+    restart: unless-stopped
+
+  sonarr:
+    image: "lscr.io/linuxserver/sonarr"
+    container_name: sonarr
+    hostname: sonarr.local
+    networks:
+      - proxy
+      - download
+    ports:
+      - '8089:8989'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/sonarr:/config
+      - ${MEDIA_DIR}/series:/media/series #optional
+      - ${MEDIA_DIR}/documentary/series:/media/documentary #optional
+      - ${MEDIA_DIR}/reality:/media/reality #optional
+      - ${DOWNLOAD_DIR}:/downloads #optional
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`${SUB_DOMAIN_SONARR}.${DOMAIN}`)"
+      - "traefik.http.routers.sonarr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
+    restart: unless-stopped
+
+  jackett:
+    image: "lscr.io/linuxserver/jackett"
+    container_name: jackett
+    hostname: jackett.local
+    networks:
+      - download
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/jackett:/config
+      - ${DOWNLOAD_DIR}:/downloads
+    ports:
+      - '8083:9117'
+    restart: unless-stopped
+
+  bazarr:
+    image: "lscr.io/linuxserver/bazarr"
+    container_name: bazarr
+    hostname: bazarr.local
+    networks:
+      - download
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/bazarr:/config
+      - ${MEDIA_DIR}:/media
+    ports:
+      - '8084:6767'
+    restart: unless-stopped
+
+  prowlarr:
+    image: "lscr.io/linuxserver/prowlarr"
+    container_name: prowlarr
+    hostname: prowlarr.local
+    networks:
+      - download
+    # ports:
+    #   - '8085:9696'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/prowlarr/config:/config
+    restart: unless-stopped
+
+  flaresolverr:
+    image: "flaresolverr/flaresolverr"
+    container_name: flaresolverr
+    hostname: flare.local
+    networks:
+      - download
+    # ports:
+    #   - '8086:8191'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/flaresolverr/config:/config
+    restart: unless-stopped
+
+  readarr:
+    image: "lscr.io/linuxserver/readarr:nightly"
+    container_name: readarr
+    hostname: readarr.local
+    networks:
+      - proxy
+      - download
+    ports:
+      - '8087:8787'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/readarr/config:/config
+      - ${MEDIA_DIR}/books:/media/books
+      - ${DOWNLOAD_DIR}:/downloads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.readarr.rule=Host(`${SUB_DOMAIN_READARR}.${DOMAIN}`)"
+      - "traefik.http.routers.readarr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.readarr.loadbalancer.server.port=8787"
+    restart: unless-stopped
+
+  searcharr:
+    container_name: searcharr
+    image: "toddrob/searcharr"
+    volumes:
+      - ${DOCKER_DIR}/download_stack/searcharr/data:/app/data
+      - ${DOCKER_DIR}/download_stack/searcharr/logs:/app/logs
+      - ${DOCKER_DIR}/download_stack/searcharr/settings.py:/app/settings.py
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    depends_on:
+      - sonarr
+      - radarr
+      - readarr
+    restart: unless-stopped
+    network_mode: host

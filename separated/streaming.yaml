@@ -1,0 +1,129 @@
+version: ${ERPNEXT_VERSION}
+
+networks:
+  streaming:
+    driver: bridge
+    name: media_network
+  proxy:
+    name: proxy_network
+    external: true
+
+services:
+  watchstate:
+    image: "ghcr.io/arabcoders/watchstate"
+    user: "${ENV_PUID}:${ENV_PGID}"
+    container_name: watchstate
+    restart: unless-stopped 
+    environment:
+      - WS_TZ=${TIMEZONE}
+      - WS_CRON_IMPORT=1
+      - WS_CRON_EXPORT=1
+    # ports:
+    #   - '18080:8080'
+    networks:
+      - streaming
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/watchstate:/config:rw
+
+  plex:
+    image: "lscr.io/linuxserver/plex"
+    container_name: plex
+    hostname: plex.local
+    ports:
+      - '32400:32400'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      # - memory-swap=4096
+      # - memory=6144
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/plex/config:/config
+      # - ${DOCKER_DIR}/streaming_stack/plex/transcode:/transcode
+      - /dev/shm:/transcode
+      - ${MEDIA_DIR}:/media:ro
+    # devices:
+    #   - /dev/dri:/dev/dri
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.plex.rule=Host(`${SUB_DOMAIN_PLEX}.${DOMAIN}`)"
+      - "traefik.http.routers.plex.tls.certresolver=letsencrypt"
+      - "traefik.http.services.plex.loadbalancer.server.port=32400"
+    restart: unless-stopped
+
+  jellyfin:
+    image: "jellyfin/jellyfin"
+    container_name: jellyfin
+    hostname: jellyfin.local
+    # ports:
+    #   - '8097:8096'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+      # - memory-swap=4096
+      # - memory=6144
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/jellyfin/config:/config
+      - ${DOCKER_DIR}/streaming_stack/jellyfin/cache:/cache
+      - ${MEDIA_DIR}:/media:ro
+    # devices:
+    #   - /dev/dri:/dev/dri
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`${SUB_DOMAIN_JELLYFIN}.${DOMAIN}`)"
+      - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+    restart: unless-stopped
+
+  calibre-web:
+    image: "lscr.io/linuxserver/calibre-web"
+    container_name: calibre-web
+    hostname: calibre-web.local
+    # ports:
+    #   - '8098:8083'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/calibre_web/config:/config
+      - ${DOCKER_DIR}/streaming_stack/calibre_web/database:/database
+      - ${MEDIA_DIR}/books:/books
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.calibre-web.rule=Host(`calibre.${DOMAIN}`)"
+      - "traefik.http.routers.calibre-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.calibre-web.loadbalancer.server.port=8083"
+    restart: unless-stopped
+
+  calibre:
+    image: "lscr.io/linuxserver/calibre"
+    container_name: calibre
+    hostname: calibre.local
+    ports:
+      - '8095:8080'
+      - '8094:8081'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/calibre/config:/config
+      - ${DOWNLOAD_DIR}/complete/ebook:/downloads
+      - ${MEDIA_DIR}/books:/books
+    restart: unless-stopped

@@ -1,0 +1,212 @@
+version: ${ERPNEXT_VERSION}
+
+volumes:
+  redis:
+    driver: local
+  crowdsec-db:
+  crowdsec-config:
+
+networks:
+  proxy:
+    name: proxy_network
+    external: true
+  database:
+    name: data_network
+    external: true
+
+services:
+  traefik:
+    image: "traefik:latest"
+    container_name: traefik
+    restart: unless-stopped
+    networks:
+      - proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DUCKDNS_TOKEN=${DUCKDNS_TOKEN}
+    volumes:
+      - ${DOCKER_DIR}/network_stack/traefik/config:/etc/traefik
+      - ${DOCKER_DIR}/network_stack/traefik/letsencrypt:/letsencrypt
+      - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`) || (Host(`${DOMAIN}`) && Path(`/traefik`))"
+      # - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"      
+      # - "traefik.http.routers.traefik.middlewares=traefik-auth"
+      # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
+
+  # authentik_redis:
+  #   image: docker.io/library/redis:alpine
+  #   container_name: authentik_redis
+  #   command: --save 60 1 --loglevel warning
+  #   restart: unless-stopped
+  #   networks:
+  #     - database
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+  #     start_period: 20s
+  #     interval: 30s
+  #     retries: 5
+  #     timeout: 3s
+  #   volumes:
+  #     - redis:/data
+
+  # authentik_server:
+  #   image: ghcr.io/goauthentik/server
+  #   container_name: authentik_server
+  #   restart: unless-stopped
+  #   command: server
+  #   environment:
+  #     - AUTHENTIK_REDIS__HOST=authentik_redis
+  #     - AUTHENTIK_POSTGRESQL__HOST=postgres
+  #     - AUTHENTIK_POSTGRESQL__USER=authentik
+  #     - AUTHENTIK_POSTGRESQL__NAME=authentik
+  #     - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PASS}
+  #     - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
+  #   volumes:
+  #     - ${DOCKER_DIR}/network_stack/authentik/media:/media
+  #     - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
+  #   networks:
+  #     - database
+  #     - proxy
+  #   # ports:
+  #   #   - "${COMPOSE_PORT_HTTP:-9000}:9000"
+  #   #   - "${COMPOSE_PORT_HTTPS:-9443}:9443"
+  #   depends_on:
+  #     - authentik_redis
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.authentik.rule=Host(`oauth.${DOMAIN}`)"
+  #     - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+  #     - "traefik.http.routers.authentik.tls.certresolver=letsencrypt"
+  #     - traefik.http.middlewares.authentik.forwardauth.address=https://oauth.kamovie.duckdns.org
+  #     - traefik.http.middlewares.authentik.forwardauth.trustForwardHeader=true
+  #     - traefik.http.middlewares.authentik.forwardauth.authResponseHeaders=X-authentik-username,X-authentik-groups,X-authentik-email,X-authentik-name,X-authentik-uid,X-authentik-jwt,X-authentik-meta-jwks,X-authentik-meta-outpost,X-authentik-meta-provider,X-authentik-meta-app,X-authentik-meta-version
+       
+  # authentik_worker:
+  #   image: ghcr.io/goauthentik/server
+  #   container_name: authentik_worker
+  #   restart: unless-stopped
+  #   command: worker
+  #   environment:
+  #     - AUTHENTIK_REDIS__HOST=authentik_redis
+  #     - AUTHENTIK_POSTGRESQL__HOST=postgres
+  #     - AUTHENTIK_POSTGRESQL__USER=authentik
+  #     - AUTHENTIK_POSTGRESQL__NAME=authentik
+  #     - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PASS}
+  #     - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
+  #   # `user: root` and the docker socket volume are optional.
+  #   # See more for the docker socket integration here:
+  #   # https://goauthentik.io/docs/outposts/integrations/docker
+  #   # Removing `user: root` also prevents the worker from fixing the permissions
+  #   # on the mounted folders, so when removing this make sure the folders have the correct UID/GID
+  #   # (1000:1000 by default)
+  #   user: root
+  #   networks:
+  #     - database
+  #     - proxy
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ${DOCKER_DIR}/network_stack/authentik/media:/media
+  #     - ${DOCKER_DIR}/network_stack/authentik/certs:/certs
+  #     - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
+  #   depends_on:
+  #     - authentik_redis
+      
+  # whoami_unsecure:
+  #   image: traefik/whoami
+  #   container_name: whoami_unsecure
+  #   networks:
+  #     - proxy
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.whoami.rule=Host(`unsecure.whoami.${DOMAIN}`)"
+  #     - "traefik.http.routers.whoami.entrypoints=web"
+  #     - "traefik.http.routers.whoami.tls.certresolver=letsencrypt"      
+  #     - "traefik.http.routers.whoami.tls=true"
+  #     - 'traefik.http.routers.whoami.middlewares=authentik@docker'
+  #   depends_on:
+  #     - traefik
+  #     - authentik_server
+
+  # whoami_secure:
+  #   image: traefik/whoami
+  #   container_name: whoami_secure
+  #   networks:
+  #     - proxy
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.whoamis.rule=Host(`secure.whoami.${DOMAIN}`)"
+  #     - "traefik.http.routers.whoamis.entrypoints=websecure"
+  #     - "traefik.http.routers.whoamis.tls.certresolver=letsencrypt"      
+  #     - "traefik.http.routers.whoamis.tls=true"
+  #     - 'traefik.http.routers.whoamis.middlewares=authentik@docker'
+  #   depends_on:
+  #     - traefik
+  #     - authentik_server
+
+  crowdsec:
+    image: crowdsecurity/crowdsec
+    container_name: crowdsec
+    environment:
+      - 'GID=${ENV_PGID}'
+      - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik'
+    depends_on:
+      - 'traefik'
+    volumes:
+      - ${DOCKER_DIR}/network_stack/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml
+      - crowdsec-db:/var/lib/crowdsec/data/
+      - crowdsec-config:/etc/crowdsec/
+      - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik/:ro
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  traefik_bouncer:
+    image: docker.io/fbonalair/traefik-crowdsec-bouncer
+    container_name: traefik_bouncer
+    environment:
+      - CROWDSEC_BOUNCER_API_KEY=${TRAEFIK_BOUNCER_KEY}
+      - CROWDSEC_AGENT_HOST=crowdsec:8080
+    networks:
+      - proxy
+    depends_on:
+      - crowdsec
+    restart: unless-stopped
+
+  zitadel:
+    restart: "unless-stopped"
+    networks:
+      - "database"
+      - "proxy"
+    image: "ghcr.io/zitadel/zitadel:stable"
+    container_name: zitadel
+    # ZITADEL_MASTERKEY: 'Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju' # run tr -dc A-Za-z0-9 </dev/urandom | head -c 32
+    command: 'start-from-init --config /example-zitadel-config.yaml --config /example-zitadel-secrets.yaml --steps /example-zitadel-init-steps.yaml --masterkey "SAcD5TY0QPp89ip28bZPfEA5WDxqmobx" --tlsMode external'
+    depends_on:
+      - cockroach
+    environment:
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=mdwachira@gmail.com
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=P@s5w04d
+      - ZITADEL_MASTERKEY=Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju
+    # ports:
+    #   - "8080:8080"
+    volumes:
+      - ${DOCKER_DIR}/network_stack/zitadel/config.yaml:/example-zitadel-config.yaml:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/secrets.yaml:/example-zitadel-secrets.yaml:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/init-steps.yaml:/example-zitadel-init-steps.yaml:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/cert:/crdb-certs:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`) || (Host(`${DOMAIN}`) && Path(`/zitadel`))"
+      - "traefik.http.routers.zitadel.tls=true"
+      - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"  
+      - "traefik.http.routers.zitadel.service=zitadel"
+      - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
+      - "traefik.http.services.zitadel.loadbalancer.passHostHeader=true"
+      - "traefik.http.services.zitadel.loadbalancer.server.port=8080"

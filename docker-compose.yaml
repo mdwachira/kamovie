@@ -1,0 +1,1067 @@
+version: ${COMPOSE_VERSION}
+
+secrets:
+  db_password:
+    file: ${SECRETS_DIR}/root_password
+  db_root_password:
+    file: ${SECRETS_DIR}/password
+  admin_password:
+    file: ${SECRETS_DIR}/password
+
+volumes:
+  redis:
+  crowdsec-db:
+  crowdsec-config:
+  database:
+  db-data:
+  redis-queue-data: 
+  redis-cache-data:
+  sites:
+  logs:
+
+networks:
+  streaming:
+    driver: bridge
+    name: media_network
+  download:
+    driver: bridge
+    name: torrent_network
+  proxy:
+    driver: bridge
+    name: proxy_network
+  database:
+    driver: bridge
+    name: data_network
+  finance:
+    driver: bridge
+    name: financials_network
+
+services:
+
+#####################################################
+#                   Admin Stack                     #              
+#####################################################
+
+  portainer:
+    image: "docker.io/portainer/portainer-ce"
+    container_name: portainer
+    hostname: portainer.local
+    restart: unless-stopped
+    networks:
+      - proxy
+    # ports:
+    #   - '9000:9000'
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DOCKER_DIR}/admin_stack/portainer/data:/data
+    labels:
+     - "traefik.enable=true"
+     - "traefik.http.routers.portainer.rule=Host(`dock.${DOMAIN}`)"
+     - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+     - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+  dockge:
+    image: "docker.io/louislam/dockge:latest"
+    container_name: dockge
+    hostname: dockge.local
+    restart: unless-stopped
+    networks:
+      - proxy
+    # ports:
+    #   - '5001:5001'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_DIR}/admin_stack/dockge/data:/app/data
+      - ${DOCKER_DIR}:/home/mdwachira/docker
+    environment:
+      - DOCKGE_STACKS_DIR=/home/mdwachira/docker
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dockge.rule=Host(`dge.${DOMAIN}`)"
+      - "traefik.http.routers.dockge.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dockge.loadbalancer.server.port=5001"
+
+  homarr:
+    image: "ghcr.io/ajnart/homarr"
+    container_name: homarr
+    hostname: home.local
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/homarr/configs:/app/data/configs
+      - ${DOCKER_DIR}/admin_stack/homarr/data:/data
+      - ${DOCKER_DIR}/admin_stack/homarr/icons:/app/public/icons
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - proxy
+      - download
+      - streaming
+    # ports:
+    #   - '8190:7575'
+    environment:
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.homarr.rule=Host(`hmr.${DOMAIN}`)"
+      - "traefik.http.routers.homarr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.homarr.loadbalancer.server.port=7575"
+    restart: unless-stopped
+
+  code-server:
+    image: "lscr.io/linuxserver/code-server"
+    container_name: code-server
+    hostname: code.local
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+      - PASSWORD=P@s5w04d #optional
+      # - HASHED_PASSWORD=password #optional
+      - SUDO_PASSWORD=P@s5w04d #optional
+      - SUDO_PASSWORD_HASH=password #optional
+      - PROXY_DOMAIN=code.kamovie.duckdns.org #optional
+      - DEFAULT_WORKSPACE=/config/docker #optional
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/code-server/config:/config
+      - /home/mdwachira/docker:/config/docker
+    networks:
+      - proxy
+    # ports:
+    #   - '8187:8443'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.code-server.rule=Host(`code.${DOMAIN}`)"
+      - "traefik.http.routers.code-server.tls.certresolver=letsencrypt"
+      - "traefik.http.services.code-server.loadbalancer.server.port=8443"
+    restart: unless-stopped
+
+  jfa_go:
+    image: "docker.io/hrfee/jfa-go"
+    restart: unless-stopped
+    container_name: jfa_go
+    hostname: jfa_go
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    networks:
+      - streaming
+      - proxy
+    # ports:
+    #   - '8189:8056'
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/jfa_go:/data
+      - /home/mdwachira/docker/streaming_stack/jellyfin/config:/jf
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jfa-go.rule=Host(`auth.${DOMAIN}`)"
+      - "traefik.http.routers.jfa-go.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jfa-go.loadbalancer.server.port=8056"
+
+  ombi:
+    image: "lscr.io/linuxserver/ombi"
+    container_name: ombi
+    hostname: ombi.local
+    networks:
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/ombi:/config
+    # ports:
+    #   - '8182:3579'
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ombi.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.ombi.tls.certresolver=letsencrypt"
+      - "traefik.http.services.ombi.loadbalancer.server.port=3579"
+
+  jellyseerr:
+    image: "fallenbagel/jellyseerr:latest"
+    container_name: jellyseerr
+    environment:
+      - LOG_LEVEL=debug
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    networks:
+      - streaming
+      - proxy
+    # ports:
+    #   - '5055:5055'
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/jellyseerr:/app/config
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyseerr.rule=Host(`see.${DOMAIN}`)"
+      - "traefik.http.routers.jellyseerr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jellyseerr.loadbalancer.server.port=5055"
+
+  tautulli:
+    image: "lscr.io/linuxserver/tautulli"
+    container_name: tautulli
+    hostname: tautulli.local
+    networks:
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/tautulli:/config
+      - "${DOCKER_DIR}/streaming_stack/plex/config/Library/Application Support/Plex Media Server/Logs:/plex_logs"
+    # ports:
+    #   - '8181:8181'
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tautulli.rule=Host(`tautulli.${DOMAIN}`)"
+      - "traefik.http.routers.tautulli.tls.certresolver=letsencrypt"
+      - "traefik.http.services.tautulli.loadbalancer.server.port=8181"
+
+  overseerr:
+    image: "lscr.io/linuxserver/overseerr"
+    container_name: overseerr
+    hostname: overseerr.local
+    networks:
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/overserr:/config
+    # ports:
+    #  - '8183:5055'
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.overseerr.rule=Host(`overseerr.${DOMAIN}`)"
+      - "traefik.http.routers.overseerr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.overseerr.loadbalancer.server.port=5055"
+
+#####################################################
+#                   Network Stack                   #              
+#####################################################
+
+  traefik:
+    image: "traefik:latest"
+    container_name: traefik
+    restart: unless-stopped
+    networks:
+      - proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DUCKDNS_TOKEN=${DUCKDNS_TOKEN}
+    volumes:
+      - ${DOCKER_DIR}/network_stack/traefik/config:/etc/traefik
+      - ${DOCKER_DIR}/network_stack/traefik/letsencrypt:/letsencrypt
+      - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"      
+      # - "traefik.http.routers.traefik.middlewares=traefik-auth"
+      # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
+
+  crowdsec:
+    image: crowdsecurity/crowdsec
+    container_name: crowdsec
+    environment:
+      - 'GID=${ENV_PGID}'
+      - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik'
+    depends_on:
+      - 'traefik'
+    volumes:
+      - ${DOCKER_DIR}/network_stack/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml
+      - crowdsec-db:/var/lib/crowdsec/data/
+      - crowdsec-config:/etc/crowdsec/
+      - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik/:ro
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  traefik_bouncer:
+    image: docker.io/fbonalair/traefik-crowdsec-bouncer
+    container_name: traefik_bouncer
+    environment:
+      - CROWDSEC_BOUNCER_API_KEY=${TRAEFIK_BOUNCER_KEY}
+      - CROWDSEC_AGENT_HOST=crowdsec:8080
+    networks:
+      - proxy
+    depends_on:
+      - crowdsec
+    restart: unless-stopped
+
+  zitadel:
+    restart: "unless-stopped"
+    networks:
+      - "database"
+      - "proxy"
+    image: "ghcr.io/zitadel/zitadel:stable"
+    container_name: zitadel
+    # ZITADEL_MASTERKEY: 'Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju' # run tr -dc A-Za-z0-9 </dev/urandom | head -c 32
+    command: 'start-from-init --config /example-zitadel-config.yaml --config /example-zitadel-secrets.yaml --steps /example-zitadel-init-steps.yaml --masterkey "SAcD5TY0QPp89ip28bZPfEA5WDxqmobx" --tlsMode external'
+    depends_on:
+      - cockroach
+    environment:
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=mdwachira@gmail.com
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=P@s5w04d
+      - ZITADEL_MASTERKEY=Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju
+    # ports:
+    #   - "8080:8080"
+    volumes:
+      - ${DOCKER_DIR}/network_stack/zitadel/config.yaml:/example-zitadel-config.yaml:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/secrets.yaml:/example-zitadel-secrets.yaml:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/init-steps.yaml:/example-zitadel-init-steps.yaml:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/cert:/crdb-certs:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`) || (Host(`${DOMAIN}`) && Path(`/zitadel`))"
+      - "traefik.http.routers.zitadel.tls=true"
+      - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"  
+      - "traefik.http.routers.zitadel.service=zitadel"
+      - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
+      - "traefik.http.services.zitadel.loadbalancer.passHostHeader=true"
+      - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
+
+#####################################################
+#                   Database Stack                  #              
+#####################################################
+
+  postgres:
+    image: docker.io/library/postgres:12-alpine
+    container_name: postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
+    networks:
+      - database
+      - proxy
+    # ports:
+    #   - "8093:80"
+    environment:
+      - POSTGRES_PASSWORD=${PG_PASS:?database password required}
+      - POSTGRES_USER=${USER}
+      - POSTGRES_DB=${PG_DB:-authentik}
+
+  postgres_admin:
+    image: 'dpage/pgadmin4:latest'
+    restart: unless-stopped
+    container_name: postgres_admin
+    user: ${ENV_PUID}:${ENV_PGID}
+    environment:
+      - 'PGADMIN_DEFAULT_EMAIL=${EMAIL}'
+      - 'PGADMIN_DEFAULT_PASSWORD=P@s5w04d'
+    # secrets:
+    #   - admin_password
+    networks:
+      - database
+      - proxy
+    depends_on:
+      - postgres
+    # ports:
+    #   - "8093:80"
+    volumes:
+      - ${DOCKER_DIR}/database_stack/postgres/admin/data:/var/lib/pgadmin
+      - ${DOCKER_DIR}/database_stack/postgres/admin/logs:/var/log/pgadmin
+      - ${DOCKER_DIR}/database_stack/postgres/admin/config_distro.py:/pgadmin4/config_distro.py
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pg.${DOMAIN}`)"
+      - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
+
+  cockroach_cert:
+    image: "cockroachdb/cockroach:latest"
+    container_name: cockroach_cert
+    networks:
+      - "database"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      [
+        "cp /certs/* /zitadel-certs/ && cockroach cert create-client --overwrite --certs-dir /zitadel-certs/ --ca-key /zitadel-certs/ca.key zitadel_user && chown 1000:1000 /zitadel-certs/*",
+      ]
+    volumes:
+      - ${DOCKER_DIR}/database_stack/cockroach/cert:/certs:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/cert:/zitadel-certs:rw
+    depends_on:
+      cockroach:
+        condition: "service_healthy"
+
+  cockroach:
+    restart: "always"
+    networks:
+      - "database"
+    image: "cockroachdb/cockroach:latest"
+    container_name: cockroach
+    command: "start-single-node --advertise-addr cockroach"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
+      interval: "10s"
+      timeout: "30s"
+      retries: 5
+      start_period: "20s"
+    # ports:
+    #   - "9090:8080"
+    #   - "26257:26257"
+    volumes:
+      - ${DOCKER_DIR}/database_stack/cockroach/cert:/cockroach/certs:rw
+      - ${DOCKER_DIR}/database_stack/cockroach/data:/cockroach/cockroach-data:rw
+
+#####################################################
+#                Monitoring Stack                   #              
+#####################################################
+
+  dash:
+    image: "docker.io/mauricenino/dashdot"
+    container_name: dash
+    hostname: dash.local
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - proxy
+    # ports:
+    #   - '8188:3001'
+    volumes:
+      - /:/mnt/host:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dash.rule=Host(`dsh.${DOMAIN}`)
+      - traefik.http.routers.dash.tls.certresolver=letsencrypt
+      - "traefik.http.services.dash.loadbalancer.server.port=3001"
+
+  watchtower:
+    image: "docker.io/containrrr/watchtower"
+    restart: unless-stopped
+    container_name: watchtower
+    hostname: kamovie_remote
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - WATCHTOWER_NOTIFICATIONS=slack
+      - WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL=https://hooks.slack.com/services/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
+      - WATCHTOWER_NOTIFICATION_SLACK_IDENTIFIER=kamovie_remote
+      - WATCHTOWER_NOTIFICATION_SLACK_CHANNEL=#development_updates
+      - WATCHTOWER_REVIVE_STOPPED=true
+      - WATCHTOWER_INCLUDE_STOPPED=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=7200
+      - WATCHTOWER_NOTIFICATIONS_LEVEL=debug
+      - WATCHTOWER_NO_STARTUP_MESSAGE=true
+
+  uptime_kuma:
+    image: "docker.io/louislam/uptime-kuma"
+    restart: unless-stopped
+    container_name: uptime_kuma
+    networks:
+      - proxy
+    # ports:
+    #   - '8180:3001'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKER_DIR}/monitoring_stack/uptime_kuma:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.uptime.rule=Host(`up.${DOMAIN}`)"
+      - "traefik.http.routers.uptime.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uptime.loadbalancer.server.port=9000"
+
+  dozzle:
+    image: "amir20/dozzle"
+    restart: unless-stopped
+    container_name: dozzle
+    networks:
+      - proxy
+    # ports:
+    #   - '8189:8080'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_DIR}/monitoring_stack/dozzle:/data
+    environment:
+      - DOZZLE_AUTH_PROVIDER=simple
+      - DOOZLE_LEVEL=value
+      - DOZZLE_ENABLE_ACTIONS=true
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 3s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dozzle.rule=Host(`logs.${DOMAIN}`)"
+      - "traefik.http.routers.dozzle.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
+
+#####################################################
+#               Streaming Stack                     #              
+#####################################################
+
+  watchstate:
+    image: "ghcr.io/arabcoders/watchstate"
+    user: "${ENV_PUID}:${ENV_PGID}"
+    container_name: watchstate
+    restart: unless-stopped 
+    environment:
+      - WS_TZ=${TIMEZONE}
+      - WS_CRON_IMPORT=1
+      - WS_CRON_EXPORT=1
+    # ports:
+    #   - '18080:8080'
+    networks:
+      - streaming
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/watchstate:/config:rw
+
+  plex:
+    image: "lscr.io/linuxserver/plex"
+    container_name: plex
+    hostname: plex.local
+    ports:
+      - '32400:32400'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM}
+      # - memory-swap=4096
+      # - memory=6144
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/plex/config:/config
+      # - ${DOCKER_DIR}/streaming_stack/plex/transcode:/transcode
+      - /dev/shm:/transcode
+      - ${MEDIA_DIR}:/media:ro
+    # devices:
+    #   - /dev/dri:/dev/dri
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.plex.rule=Host(`${SUB_DOMAIN_PLEX}.${DOMAIN}`)"
+      - "traefik.http.routers.plex.tls.certresolver=letsencrypt"
+      - "traefik.http.services.plex.loadbalancer.server.port=32400"
+    restart: unless-stopped
+
+  jellyfin:
+    image: "jellyfin/jellyfin"
+    container_name: jellyfin
+    hostname: jellyfin.local
+    # ports:
+    #   - '8097:8096'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+      # - memory-swap=4096
+      # - memory=6144
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/jellyfin/config:/config
+      - ${DOCKER_DIR}/streaming_stack/jellyfin/cache:/cache
+      - ${MEDIA_DIR}:/media:ro
+    # devices:
+    #   - /dev/dri:/dev/dri
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`${SUB_DOMAIN_JELLYFIN}.${DOMAIN}`)"
+      - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+    restart: unless-stopped
+
+  calibre-web:
+    image: "lscr.io/linuxserver/calibre-web"
+    container_name: calibre-web
+    hostname: calibre-web.local
+    # ports:
+    #   - '8098:8083'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/calibre_web/config:/config
+      - ${DOCKER_DIR}/streaming_stack/calibre_web/database:/database
+      - ${MEDIA_DIR}/books:/books
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.calibre-web.rule=Host(`calibre.${DOMAIN}`)"
+      - "traefik.http.routers.calibre-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.calibre-web.loadbalancer.server.port=8083"
+    restart: unless-stopped
+
+  calibre:
+    image: "lscr.io/linuxserver/calibre"
+    container_name: calibre
+    hostname: calibre.local
+    ports:
+      - '8095:8080'
+      - '8094:8081'
+    networks:
+      - streaming
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/streaming_stack/calibre/config:/config
+      - ${DOWNLOAD_DIR}/complete/ebook:/downloads
+      - ${MEDIA_DIR}/books:/books
+    restart: unless-stopped
+
+#####################################################
+#               Downloads Stack                     #              
+#####################################################
+
+  qbittorrent:
+    image: "lscr.io/linuxserver/qbittorrent"
+    container_name: qbittorrent
+    hostname: qb.local
+    networks:
+      - download
+      - proxy
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+      - WEBUI_PORT=8080
+    volumes:
+      - ${DOCKER_DIR}/download_stack/qbittorrent/data:/config
+      - ${DOWNLOAD_DIR}:/downloads
+    ports:
+      # - '8080:8080'
+      - '6881:6881'
+      - '6881:6881/udp'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.qbittorrent.rule=Host(`${SUB_DOMAIN_QBITTORENT}.${DOMAIN}`)"
+      - "traefik.http.routers.qbittorrent.tls.certresolver=letsencrypt"
+      - "traefik.http.services.qbittorrent.loadbalancer.server.port=8080"
+    restart: unless-stopped
+
+  radarr:
+    image: "lscr.io/linuxserver/radarr"
+    container_name: radarr
+    hostname: radarr.local
+    networks:
+      - proxy
+      - download
+    ports:
+      - '8081:7878'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/radarr:/config
+      - ${MEDIA_DIR}/movie:/media/movie #optional
+      - ${MEDIA_DIR}/documentary/movie:/media/documentary #optional
+      - ${DOWNLOAD_DIR}:/downloads #optional
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.radarr.rule=Host(`${SUB_DOMAIN_RADARR}.${DOMAIN}`)"
+      - "traefik.http.routers.radarr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.radarr.loadbalancer.server.port=7878"
+    restart: unless-stopped
+
+  sonarr:
+    image: "lscr.io/linuxserver/sonarr"
+    container_name: sonarr
+    hostname: sonarr.local
+    networks:
+      - proxy
+      - download
+    ports:
+      - '8089:8989'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/sonarr:/config
+      - ${MEDIA_DIR}/series:/media/series #optional
+      - ${MEDIA_DIR}/documentary/series:/media/documentary #optional
+      - ${MEDIA_DIR}/reality:/media/reality #optional
+      - ${DOWNLOAD_DIR}:/downloads #optional
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`${SUB_DOMAIN_SONARR}.${DOMAIN}`)"
+      - "traefik.http.routers.sonarr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
+    restart: unless-stopped
+
+  jackett:
+    image: "lscr.io/linuxserver/jackett"
+    container_name: jackett
+    hostname: jackett.local
+    networks:
+      - download
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/jackett:/config
+      - ${DOWNLOAD_DIR}:/downloads
+    ports:
+      - '8083:9117'
+    restart: unless-stopped
+
+  bazarr:
+    image: "lscr.io/linuxserver/bazarr"
+    container_name: bazarr
+    hostname: bazarr.local
+    networks:
+      - download
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/bazarr:/config
+      - ${MEDIA_DIR}:/media
+    ports:
+      - '8084:6767'
+    restart: unless-stopped
+
+  prowlarr:
+    image: "lscr.io/linuxserver/prowlarr"
+    container_name: prowlarr
+    hostname: prowlarr.local
+    networks:
+      - download
+    # ports:
+    #   - '8085:9696'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/prowlarr/config:/config
+    restart: unless-stopped
+
+  flaresolverr:
+    image: "flaresolverr/flaresolverr"
+    container_name: flaresolverr
+    hostname: flare.local
+    networks:
+      - download
+    # ports:
+    #   - '8086:8191'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/flaresolverr/config:/config
+    restart: unless-stopped
+
+  readarr:
+    image: "lscr.io/linuxserver/readarr:nightly"
+    container_name: readarr
+    hostname: readarr.local
+    networks:
+      - proxy
+      - download
+    ports:
+      - '8087:8787'
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    volumes:
+      - ${DOCKER_DIR}/download_stack/readarr/config:/config
+      - ${MEDIA_DIR}/books:/media/books
+      - ${DOWNLOAD_DIR}:/downloads
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.readarr.rule=Host(`${SUB_DOMAIN_READARR}.${DOMAIN}`)"
+      - "traefik.http.routers.readarr.tls.certresolver=letsencrypt"
+      - "traefik.http.services.readarr.loadbalancer.server.port=8787"
+    restart: unless-stopped
+
+  searcharr:
+    container_name: searcharr
+    image: "toddrob/searcharr"
+    volumes:
+      - ${DOCKER_DIR}/download_stack/searcharr/data:/app/data
+      - ${DOCKER_DIR}/download_stack/searcharr/logs:/app/logs
+      - ${DOCKER_DIR}/download_stack/searcharr/settings.py:/app/settings.py
+    environment:
+      - PUID=${ENV_PUID}
+      - PGID=${ENV_PGID}
+      - TZ=${TIMEZONE}
+    depends_on:
+      - sonarr
+      - radarr
+      - readarr
+    restart: unless-stopped
+    network_mode: host
+
+#####################################################
+#                 Finance Stack                     #              
+#####################################################
+
+  backend:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+  configurator:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint:
+      - bash
+      - -c
+    # add redis_socketio for backward compatibility
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      SOCKETIO_PORT: "9000"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+  create-site:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: none
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        wait-for-it -t 120 db:3306;
+        wait-for-it -t 120 redis-cache:6379;
+        wait-for-it -t 120 redis-queue:6379;
+        export start=`date +%s`;
+        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+        do
+          echo "Waiting for sites/common_site_config.json to be created";
+          sleep 5;
+          if (( `date +%s`-start > 120 )); then
+            echo "could not find sites/common_site_config.json with required keys";
+            exit 1
+          fi
+        done;
+        echo "sites/common_site_config.json found";
+        echo "bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext --set-default frontend";
+        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext erp.kamovie.duckdns.org;
+        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext demo.kamovie.duckdns.org;
+
+  db:
+    image: mariadb:10.6
+    healthcheck:
+      test: mysqladmin ping -h localhost --password=P4s5w04d
+      interval: 1s
+      retries: 15
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
+    environment:
+      - MYSQL_ROOT_HOST=%
+      - MYSQL_ROOT_PASSWORD=P4s5w04d
+    volumes:
+      - db-data:/var/lib/mysql
+
+  site_default:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      BACKEND: backend:8000
+      FRAPPE_SITE_NAME_HEADER: frontend
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: 120
+      CLIENT_MAX_BODY_SIZE: 50m
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    ports:
+      - "8080:8080"
+
+  site_erp:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      BACKEND: backend:8000
+      FRAPPE_SITE_NAME_HEADER: erp.kamovie.duckdns.org
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: 120
+      CLIENT_MAX_BODY_SIZE: 50m
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    # ports:
+    #   - "8081:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.site_erp.rule=Host(`erp.${DOMAIN}`)"
+      - "traefik.http.routers.site_erp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.site_erp.loadbalancer.server.port=8080"
+
+  site_demo:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      BACKEND: backend:8000
+      FRAPPE_SITE_NAME_HEADER: demo.kamovie.duckdns.org
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: 120
+      CLIENT_MAX_BODY_SIZE: 50m
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    # ports:
+    #   - "8082:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.site_demo.rule=Host(`demo.${DOMAIN}`)"
+      - "traefik.http.routers.site_demo.tls.certresolver=letsencrypt"
+      - "traefik.http.services.site_demo.loadbalancer.server.port=8080"
+
+  queue-long:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - worker
+      - --queue
+      - long,default,short
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+  queue-short:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - worker
+      - --queue
+      - short,default
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+  redis-queue:
+    image: redis:alpine
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - redis-queue-data:/data
+
+  redis-cache:
+    image: redis:alpine
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - redis-cache-data:/data
+
+  scheduler:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - schedule
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+  websocket:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+
+#####################################################
+#                   Admin Stack                     #              
+#####################################################

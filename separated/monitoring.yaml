@@ -1,0 +1,93 @@
+version: ${ERPNEXT_VERSION}
+
+networks:
+  proxy:
+    name: proxy_network
+    external: true
+
+services:
+  dash:
+    image: "docker.io/mauricenino/dashdot"
+    container_name: dash
+    hostname: dash.local
+    restart: unless-stopped
+    privileged: true
+    networks:
+      - proxy
+    # ports:
+    #   - '8188:3001'
+    volumes:
+      - /:/mnt/host:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dash.rule=Host(`dsh.${DOMAIN}`)
+      - traefik.http.routers.dash.tls.certresolver=letsencrypt
+      - "traefik.http.services.dash.loadbalancer.server.port=3001"
+
+  watchtower:
+    image: "docker.io/containrrr/watchtower"
+    restart: unless-stopped
+    container_name: watchtower
+    hostname: kamovie_remote
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - WATCHTOWER_NOTIFICATIONS=slack
+      - WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL=https://hooks.slack.com/services/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
+      - WATCHTOWER_NOTIFICATION_SLACK_IDENTIFIER=kamovie_remote
+      - WATCHTOWER_NOTIFICATION_SLACK_CHANNEL=#development_updates
+      - WATCHTOWER_REVIVE_STOPPED=true
+      - WATCHTOWER_INCLUDE_STOPPED=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=7200
+      - WATCHTOWER_NOTIFICATIONS_LEVEL=debug
+      - WATCHTOWER_NO_STARTUP_MESSAGE=true
+
+  uptime_kuma:
+    image: "docker.io/louislam/uptime-kuma"
+    restart: unless-stopped
+    container_name: uptime_kuma
+    networks:
+      - proxy
+    # ports:
+    #   - '8180:3001'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKER_DIR}/monitoring_stack/uptime_kuma:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.uptime.rule=Host(`up.${DOMAIN}`)"
+      - "traefik.http.routers.uptime.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uptime.loadbalancer.server.port=9000"
+
+  dozzle:
+    image: "amir20/dozzle"
+    restart: unless-stopped
+    container_name: dozzle
+    networks:
+      - proxy
+    # ports:
+    #   - '8189:8080'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_DIR}/monitoring_stack/dozzle:/data
+    environment:
+      - DOZZLE_AUTH_PROVIDER=simple
+      - DOOZLE_LEVEL=value
+      - DOZZLE_ENABLE_ACTIONS=true
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 3s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dozzle.rule=Host(`logs.${DOMAIN}`)"
+      - "traefik.http.routers.dozzle.tls.certresolver=letsencrypt"
+      - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
+      

@@ -1,0 +1,106 @@
+version: ${COMPOSE_VERSION}
+
+secrets:
+  db_password:
+    file: ${SECRETS_DIR}/root_password
+  db_root_password:
+    file: ${SECRETS_DIR}/password
+  admin_password:
+    file: ${SECRETS_DIR}/password
+
+volumes:
+  database:
+
+networks:
+  proxy:
+    driver: bridge
+    name: proxy_network
+  database:
+    driver: bridge
+    name: data_network
+
+services:
+  postgres:
+    image: docker.io/library/postgres:12-alpine
+    container_name: postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
+    networks:
+      - database
+      - proxy
+    # ports:
+    #   - "8093:80"
+    environment:
+      - POSTGRES_PASSWORD=${PG_PASS:?database password required}
+      - POSTGRES_USER=${USER}
+      - POSTGRES_DB=${PG_DB:-authentik}
+
+  postgres_admin:
+    image: 'dpage/pgadmin4:latest'
+    restart: unless-stopped
+    container_name: postgres_admin
+    user: ${ENV_PUID}:${ENV_PGID}
+    environment:
+      - 'PGADMIN_DEFAULT_EMAIL=${EMAIL}'
+      - 'PGADMIN_DEFAULT_PASSWORD=P@s5w04d'
+    # secrets:
+    #   - admin_password
+    networks:
+      - database
+      - proxy
+    depends_on:
+      - postgres
+    # ports:
+    #   - "8093:80"
+    volumes:
+      - ${DOCKER_DIR}/database_stack/postgres/admin/data:/var/lib/pgadmin
+      - ${DOCKER_DIR}/database_stack/postgres/admin/logs:/var/log/pgadmin
+      - ${DOCKER_DIR}/database_stack/postgres/admin/config_distro.py:/pgadmin4/config_distro.py
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pg.${DOMAIN}`)"
+      - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
+
+  cockroach_cert:
+    image: "cockroachdb/cockroach:latest"
+    container_name: cockroach_cert
+    networks:
+      - "database"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      [
+        "cp /certs/* /zitadel-certs/ && cockroach cert create-client --overwrite --certs-dir /zitadel-certs/ --ca-key /zitadel-certs/ca.key zitadel_user && chown 1000:1000 /zitadel-certs/*",
+      ]
+    volumes:
+      - ${DOCKER_DIR}/database_stack/cockroach/cert:/certs:ro
+      - ${DOCKER_DIR}/network_stack/zitadel/cert:/zitadel-certs:rw
+    depends_on:
+      cockroach:
+        condition: "service_healthy"
+
+  cockroach:
+    restart: "always"
+    networks:
+      - "database"
+    image: "cockroachdb/cockroach:latest"
+    container_name: cockroach
+    command: "start-single-node --advertise-addr cockroach"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
+      interval: "10s"
+      timeout: "30s"
+      retries: 5
+      start_period: "20s"
+    # ports:
+    #   - "9090:8080"
+    #   - "26257:26257"
+    volumes:
+      - ${DOCKER_DIR}/database_stack/cockroach/cert:/cockroach/certs:rw
+      - ${DOCKER_DIR}/database_stack/cockroach/data:/cockroach/cockroach-data:rw
