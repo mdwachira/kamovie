@@ -272,34 +272,34 @@ services:
       # - "traefik.http.routers.traefik.middlewares=traefik-auth"
       # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
 
-  # crowdsec:
-  #   image: crowdsecurity/crowdsec
-  #   container_name: crowdsec
-  #   environment:
-  #     - 'GID=${ENV_PGID}'
-  #     - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik'
-  #   depends_on:
-  #     - 'traefik'
-  #   volumes:
-  #     - ${DOCKER_DIR}/network_stack/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml
-  #     - crowdsec-db:/var/lib/crowdsec/data/
-  #     - crowdsec-config:/etc/crowdsec/
-  #     - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik/:ro
-  #   networks:
-  #     - proxy
-  #   restart: unless-stopped
+  crowdsec:
+    image: crowdsecurity/crowdsec
+    container_name: crowdsec
+    environment:
+      - 'GID=${ENV_PGID}'
+      - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik'
+    depends_on:
+      - 'traefik'
+    volumes:
+      - ${DOCKER_DIR}/network_stack/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml
+      - crowdsec-db:/var/lib/crowdsec/data/
+      - crowdsec-config:/etc/crowdsec/
+      - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik/:ro
+    networks:
+      - proxy
+    restart: unless-stopped
 
-  # traefik_bouncer:
-  #   image: docker.io/fbonalair/traefik-crowdsec-bouncer
-  #   restart: unless-stopped
-  #   container_name: traefik_bouncer
-  #   environment:
-  #     - CROWDSEC_BOUNCER_API_KEY=${TRAEFIK_BOUNCER_KEY}
-  #     - CROWDSEC_AGENT_HOST=crowdsec:8080
-  #   networks:
-  #     - proxy
-  #   depends_on:
-  #     - crowdsec
+  crowdsec_bouncer:
+    image: docker.io/fbonalair/traefik-crowdsec-bouncer
+    restart: unless-stopped
+    container_name: traefik_bouncer
+    environment:
+      - CROWDSEC_BOUNCER_API_KEY=${TRAEFIK_BOUNCER_KEY}
+      - CROWDSEC_AGENT_HOST=crowdsec:8080
+    networks:
+      - proxy
+    depends_on:
+      - crowdsec
 
   zitadel:
     image: "ghcr.io/zitadel/zitadel:stable"
