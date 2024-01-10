@@ -292,7 +292,7 @@ services:
   crowdsec_bouncer:
     image: docker.io/fbonalair/traefik-crowdsec-bouncer
     restart: unless-stopped
-    container_name: traefik_bouncer
+    container_name: crowdsec_bouncer
     environment:
       - CROWDSEC_BOUNCER_API_KEY=${TRAEFIK_BOUNCER_KEY}
       - CROWDSEC_AGENT_HOST=crowdsec:8080
@@ -568,8 +568,8 @@ services:
     image: "jellyfin/jellyfin"
     container_name: jellyfin
     hostname: jellyfin.local
-    ports:
-      - '8097:8096'
+    # ports:
+    #   - '8097:8096'
     networks:
       - proxy
       - streaming
@@ -577,8 +577,8 @@ services:
       - PUID=${ENV_PUID}
       - PGID=${ENV_PGID}
       - TZ=${TIMEZONE}
-      - memory-swap=4096
-      - memory=6144
+      # - memory-swap=4096
+      # - memory=6144
     volumes:
       - ${DOCKER_DIR}/streaming_stack/jellyfin/config:/config
       - ${DOCKER_DIR}/streaming_stack/jellyfin/cache:/cache
