@@ -151,7 +151,7 @@ services:
     #   - '8189:8056'
     volumes:
       - ${DOCKER_DIR}/admin_stack/jfa_go:/data
-      - /home/mdwachira/docker/streaming_stack/jellyfin/config:/jf
+      - ${DOCKER_DIR}/streaming_stack/jellyfin/config:/jf
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.jfa-go.rule=Host(`auth.${DOMAIN}`)"
@@ -212,7 +212,7 @@ services:
       - PGID=${ENV_PGID}
       - TZ=${TIMEZONE}
     volumes:
-      - ${DOCKER_DIR}/admin_stack/tautulli:/config
+      - "${DOCKER_DIR}/admin_stack/tautulli:/config"
       - "${DOCKER_DIR}/streaming_stack/plex/config/Library/Application Support/Plex Media Server/Logs:/plex_logs"
     # ports:
     #   - '8181:8181'
@@ -229,14 +229,14 @@ services:
     hostname: overseerr.local
     networks:
       - proxy
+    # ports:
+    #  - '8183:5055'
     environment:
       - PUID=${ENV_PUID}
       - PGID=${ENV_PGID}
       - TZ=${TIMEZONE}
     volumes:
-      - ${DOCKER_DIR}/admin_stack/overserr:/config
-    # ports:
-    #  - '8183:5055'
+      - "${DOCKER_DIR}/admin_stack/overserr:/config"
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
@@ -272,42 +272,42 @@ services:
       # - "traefik.http.routers.traefik.middlewares=traefik-auth"
       # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
 
-  crowdsec:
-    image: crowdsecurity/crowdsec
-    container_name: crowdsec
-    environment:
-      - 'GID=${ENV_PGID}'
-      - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik'
-    depends_on:
-      - 'traefik'
-    volumes:
-      - ${DOCKER_DIR}/network_stack/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml
-      - crowdsec-db:/var/lib/crowdsec/data/
-      - crowdsec-config:/etc/crowdsec/
-      - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik/:ro
-    networks:
-      - proxy
-    restart: unless-stopped
+  # crowdsec:
+  #   image: crowdsecurity/crowdsec
+  #   container_name: crowdsec
+  #   environment:
+  #     - 'GID=${ENV_PGID}'
+  #     - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik'
+  #   depends_on:
+  #     - 'traefik'
+  #   volumes:
+  #     - ${DOCKER_DIR}/network_stack/crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml
+  #     - crowdsec-db:/var/lib/crowdsec/data/
+  #     - crowdsec-config:/etc/crowdsec/
+  #     - ${DOCKER_DIR}/network_stack/traefik/logs:/var/log/traefik/:ro
+  #   networks:
+  #     - proxy
+  #   restart: unless-stopped
 
-  traefik_bouncer:
-    image: docker.io/fbonalair/traefik-crowdsec-bouncer
-    container_name: traefik_bouncer
-    environment:
-      - CROWDSEC_BOUNCER_API_KEY=${TRAEFIK_BOUNCER_KEY}
-      - CROWDSEC_AGENT_HOST=crowdsec:8080
-    networks:
-      - proxy
-    depends_on:
-      - crowdsec
-    restart: unless-stopped
+  # traefik_bouncer:
+  #   image: docker.io/fbonalair/traefik-crowdsec-bouncer
+  #   restart: unless-stopped
+  #   container_name: traefik_bouncer
+  #   environment:
+  #     - CROWDSEC_BOUNCER_API_KEY=${TRAEFIK_BOUNCER_KEY}
+  #     - CROWDSEC_AGENT_HOST=crowdsec:8080
+  #   networks:
+  #     - proxy
+  #   depends_on:
+  #     - crowdsec
 
   zitadel:
-    restart: "unless-stopped"
-    networks:
-      - "database"
-      - "proxy"
     image: "ghcr.io/zitadel/zitadel:stable"
+    restart: unless-stopped
     container_name: zitadel
+    networks:
+      - database
+      - proxy
     # ZITADEL_MASTERKEY: 'Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju' # run tr -dc A-Za-z0-9 </dev/urandom | head -c 32
     command: 'start-from-init --config /example-zitadel-config.yaml --config /example-zitadel-secrets.yaml --steps /example-zitadel-init-steps.yaml --masterkey "SAcD5TY0QPp89ip28bZPfEA5WDxqmobx" --tlsMode external'
     depends_on:
@@ -326,7 +326,7 @@ services:
       - ${DOCKER_DIR}/network_stack/zitadel/cert:/crdb-certs:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`) || (Host(`${DOMAIN}`) && Path(`/zitadel`))"
+      - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`)"
       - "traefik.http.routers.zitadel.tls=true"
       - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"
       - "traefik.http.routers.zitadel.service=zitadel"
@@ -360,32 +360,32 @@ services:
       - POSTGRES_USER=${USER}
       - POSTGRES_DB=${PG_DB:-authentik}
 
-  postgres_admin:
-    image: 'dpage/pgadmin4:latest'
-    restart: unless-stopped
-    container_name: postgres_admin
-    user: ${ENV_PUID}:${ENV_PGID}
-    environment:
-      - 'PGADMIN_DEFAULT_EMAIL=${EMAIL}'
-      - 'PGADMIN_DEFAULT_PASSWORD=P@s5w04d'
-    # secrets:
-    #   - admin_password
-    networks:
-      - database
-      - proxy
-    depends_on:
-      - postgres
-      - traefik
-    # ports:
-    #   - "8093:80"
-    volumes:
-      - ${DOCKER_DIR}/database_stack/postgres/admin/data:/var/lib/pgadmin
-      - ${DOCKER_DIR}/database_stack/postgres/admin/logs:/var/log/pgadmin
-      - ${DOCKER_DIR}/database_stack/postgres/admin/config_distro.py:/pgadmin4/config_distro.py
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.pgadmin.rule=Host(`pg.${DOMAIN}`)"
-      - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
+  # postgres_admin:
+  #   image: 'dpage/pgadmin4:latest'
+  #   restart: unless-stopped
+  #   container_name: postgres_admin
+  #   user: ${ENV_PUID}:${ENV_PGID}
+  #   environment:
+  #     - 'PGADMIN_DEFAULT_EMAIL=${EMAIL}'
+  #     - 'PGADMIN_DEFAULT_PASSWORD=P@s5w04d'
+  #   # secrets:
+  #   #   - admin_password
+  #   networks:
+  #     - database
+  #     - proxy
+  #   depends_on:
+  #     - postgres
+  #     - traefik
+  #   # ports:
+  #   #   - "8093:80"
+  #   volumes:
+  #     - ${DOCKER_DIR}/database_stack/postgres/admin/data:/var/lib/pgadmin
+  #     - ${DOCKER_DIR}/database_stack/postgres/admin/logs:/var/log/pgadmin
+  #     - ${DOCKER_DIR}/database_stack/postgres/admin/config_distro.py:/pgadmin4/config_distro.py
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.pgadmin.rule=Host(`pg.${DOMAIN}`)"
+  #     - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
 
   cockroach_cert:
     image: "cockroachdb/cockroach:latest"
@@ -441,9 +441,9 @@ services:
     volumes:
       - /:/mnt/host:ro
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.dash.rule=Host(`dsh.${DOMAIN}`)
-      - traefik.http.routers.dash.tls.certresolver=letsencrypt
+      - "traefik.enable=true"
+      - "traefik.http.routers.dash.rule=Host(`dsh.${DOMAIN}`)"
+      - "traefik.http.routers.dash.tls.certresolver=letsencrypt"
       - "traefik.http.services.dash.loadbalancer.server.port=3001"
 
   watchtower:
@@ -568,17 +568,17 @@ services:
     image: "jellyfin/jellyfin"
     container_name: jellyfin
     hostname: jellyfin.local
-    # ports:
-    #   - '8097:8096'
+    ports:
+      - '8097:8096'
     networks:
-      - streaming
       - proxy
+      - streaming
     environment:
       - PUID=${ENV_PUID}
       - PGID=${ENV_PGID}
       - TZ=${TIMEZONE}
-      # - memory-swap=4096
-      # - memory=6144
+      - memory-swap=4096
+      - memory=6144
     volumes:
       - ${DOCKER_DIR}/streaming_stack/jellyfin/config:/config
       - ${DOCKER_DIR}/streaming_stack/jellyfin/cache:/cache
@@ -829,240 +829,240 @@ services:
 #                 Finance Stack                     #              
 #####################################################
 
-  backend:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
+  # backend:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
 
-  configurator:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: none
-    entrypoint:
-      - bash
-      - -c
-    # add redis_socketio for backward compatibility
-    command:
-      - >
-        ls -1 apps > sites/apps.txt;
-        bench set-config -g db_host $$DB_HOST;
-        bench set-config -gp db_port $$DB_PORT;
-        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
-        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
-        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
-        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+  # configurator:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: none
+  #   entrypoint:
+  #     - bash
+  #     - -c
+  #   # add redis_socketio for backward compatibility
+  #   command:
+  #     - >
+  #       ls -1 apps > sites/apps.txt;
+  #       bench set-config -g db_host $$DB_HOST;
+  #       bench set-config -gp db_port $$DB_PORT;
+  #       bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+  #       bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+  #       bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+  #       bench set-config -gp socketio_port $$SOCKETIO_PORT;
 
-    environment:
-      DB_HOST: db
-      DB_PORT: "3306"
-      REDIS_CACHE: redis-cache:6379
-      REDIS_QUEUE: redis-queue:6379
-      SOCKETIO_PORT: "9000"
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
+  #   environment:
+  #     DB_HOST: db
+  #     DB_PORT: "3306"
+  #     REDIS_CACHE: redis-cache:6379
+  #     REDIS_QUEUE: redis-queue:6379
+  #     SOCKETIO_PORT: "9000"
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
 
-  create-site:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: none
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
-    entrypoint:
-      - bash
-      - -c
-    command:
-      - >
-        wait-for-it -t 120 db:3306;
-        wait-for-it -t 120 redis-cache:6379;
-        wait-for-it -t 120 redis-queue:6379;
-        export start=`date +%s`;
-        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
-          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
-          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
-        do
-          echo "Waiting for sites/common_site_config.json to be created";
-          sleep 5;
-          if (( `date +%s`-start > 120 )); then
-            echo "could not find sites/common_site_config.json with required keys";
-            exit 1
-          fi
-        done;
-        echo "sites/common_site_config.json found";
-        echo "bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext --set-default frontend";
-        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext erp.kamovie.duckdns.org;
-        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext demo.kamovie.duckdns.org;
+  # create-site:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: none
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
+  #   entrypoint:
+  #     - bash
+  #     - -c
+  #   command:
+  #     - >
+  #       wait-for-it -t 120 db:3306;
+  #       wait-for-it -t 120 redis-cache:6379;
+  #       wait-for-it -t 120 redis-queue:6379;
+  #       export start=`date +%s`;
+  #       until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
+  #         [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
+  #         [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+  #       do
+  #         echo "Waiting for sites/common_site_config.json to be created";
+  #         sleep 5;
+  #         if (( `date +%s`-start > 120 )); then
+  #           echo "could not find sites/common_site_config.json with required keys";
+  #           exit 1
+  #         fi
+  #       done;
+  #       echo "sites/common_site_config.json found";
+  #       echo "bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext --set-default frontend";
+  #       bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext erp.kamovie.duckdns.org;
+  #       bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext demo.kamovie.duckdns.org;
 
-  db:
-    image: mariadb:10.6
-    healthcheck:
-      test: mysqladmin ping -h localhost --password=P4s5w04d
-      interval: 1s
-      retries: 15
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --skip-character-set-client-handshake
-      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
-    environment:
-      - MYSQL_ROOT_HOST=%
-      - MYSQL_ROOT_PASSWORD=P4s5w04d
-    volumes:
-      - db-data:/var/lib/mysql
+  # db:
+  #   image: mariadb:10.6
+  #   healthcheck:
+  #     test: mysqladmin ping -h localhost --password=P4s5w04d
+  #     interval: 1s
+  #     retries: 15
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - --character-set-server=utf8mb4
+  #     - --collation-server=utf8mb4_unicode_ci
+  #     - --skip-character-set-client-handshake
+  #     - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
+  #   environment:
+  #     - MYSQL_ROOT_HOST=%
+  #     - MYSQL_ROOT_PASSWORD=P4s5w04d
+  #   volumes:
+  #     - db-data:/var/lib/mysql
 
-  site_default:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - nginx-entrypoint.sh
-    environment:
-      BACKEND: backend:8000
-      FRAPPE_SITE_NAME_HEADER: frontend
-      SOCKETIO: websocket:9000
-      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
-      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
-      UPSTREAM_REAL_IP_RECURSIVE: "off"
-      PROXY_READ_TIMEOUT: 120
-      CLIENT_MAX_BODY_SIZE: 50m
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
-    ports:
-      - "8080:8080"
+  # site_default:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - nginx-entrypoint.sh
+  #   environment:
+  #     BACKEND: backend:8000
+  #     FRAPPE_SITE_NAME_HEADER: frontend
+  #     SOCKETIO: websocket:9000
+  #     UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+  #     UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+  #     UPSTREAM_REAL_IP_RECURSIVE: "off"
+  #     PROXY_READ_TIMEOUT: 120
+  #     CLIENT_MAX_BODY_SIZE: 50m
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
+  #   ports:
+  #     - "8080:8080"
 
-  site_erp:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - nginx-entrypoint.sh
-    environment:
-      BACKEND: backend:8000
-      FRAPPE_SITE_NAME_HEADER: erp.kamovie.duckdns.org
-      SOCKETIO: websocket:9000
-      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
-      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
-      UPSTREAM_REAL_IP_RECURSIVE: "off"
-      PROXY_READ_TIMEOUT: 120
-      CLIENT_MAX_BODY_SIZE: 50m
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
-    # ports:
-    #   - "8081:8080"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.site_erp.rule=Host(`erp.${DOMAIN}`)"
-      - "traefik.http.routers.site_erp.tls.certresolver=letsencrypt"
-      - "traefik.http.services.site_erp.loadbalancer.server.port=8080"
+  # site_erp:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - nginx-entrypoint.sh
+  #   environment:
+  #     BACKEND: backend:8000
+  #     FRAPPE_SITE_NAME_HEADER: erp.kamovie.duckdns.org
+  #     SOCKETIO: websocket:9000
+  #     UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+  #     UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+  #     UPSTREAM_REAL_IP_RECURSIVE: "off"
+  #     PROXY_READ_TIMEOUT: 120
+  #     CLIENT_MAX_BODY_SIZE: 50m
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
+  #   # ports:
+  #   #   - "8081:8080"
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.site_erp.rule=Host(`erp.${DOMAIN}`)"
+  #     - "traefik.http.routers.site_erp.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.site_erp.loadbalancer.server.port=8080"
 
-  site_demo:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - nginx-entrypoint.sh
-    environment:
-      BACKEND: backend:8000
-      FRAPPE_SITE_NAME_HEADER: demo.kamovie.duckdns.org
-      SOCKETIO: websocket:9000
-      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
-      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
-      UPSTREAM_REAL_IP_RECURSIVE: "off"
-      PROXY_READ_TIMEOUT: 120
-      CLIENT_MAX_BODY_SIZE: 50m
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
-    # ports:
-    #   - "8082:8080"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.site_demo.rule=Host(`demo.${DOMAIN}`)"
-      - "traefik.http.routers.site_demo.tls.certresolver=letsencrypt"
-      - "traefik.http.services.site_demo.loadbalancer.server.port=8080"
+  # site_demo:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - nginx-entrypoint.sh
+  #   environment:
+  #     BACKEND: backend:8000
+  #     FRAPPE_SITE_NAME_HEADER: demo.kamovie.duckdns.org
+  #     SOCKETIO: websocket:9000
+  #     UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+  #     UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+  #     UPSTREAM_REAL_IP_RECURSIVE: "off"
+  #     PROXY_READ_TIMEOUT: 120
+  #     CLIENT_MAX_BODY_SIZE: 50m
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
+  #   # ports:
+  #   #   - "8082:8080"
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.site_demo.rule=Host(`demo.${DOMAIN}`)"
+  #     - "traefik.http.routers.site_demo.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.site_demo.loadbalancer.server.port=8080"
 
-  queue-long:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - bench
-      - worker
-      - --queue
-      - long,default,short
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
+  # queue-long:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - bench
+  #     - worker
+  #     - --queue
+  #     - long,default,short
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
 
-  queue-short:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - bench
-      - worker
-      - --queue
-      - short,default
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
+  # queue-short:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - bench
+  #     - worker
+  #     - --queue
+  #     - short,default
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
 
-  redis-queue:
-    image: redis:alpine
-    deploy:
-      restart_policy:
-        condition: on-failure
-    volumes:
-      - redis-queue-data:/data
+  # redis-queue:
+  #   image: redis:alpine
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   volumes:
+  #     - redis-queue-data:/data
 
-  redis-cache:
-    image: redis:alpine
-    deploy:
-      restart_policy:
-        condition: on-failure
-    volumes:
-      - redis-cache-data:/data
+  # redis-cache:
+  #   image: redis:alpine
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   volumes:
+  #     - redis-cache-data:/data
 
-  scheduler:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - bench
-      - schedule
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
+  # scheduler:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - bench
+  #     - schedule
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
 
-  websocket:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    deploy:
-      restart_policy:
-        condition: on-failure
-    command:
-      - node
-      - /home/frappe/frappe-bench/apps/frappe/socketio.js
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
+  # websocket:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   command:
+  #     - node
+  #     - /home/frappe/frappe-bench/apps/frappe/socketio.js
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - logs:/home/frappe/frappe-bench/logs
 
 #####################################################
 #                   Admin Stack                     #              
