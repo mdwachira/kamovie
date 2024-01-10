@@ -14,7 +14,7 @@ volumes:
   crowdsec-config:
   database:
   db-data:
-  redis-queue-data: 
+  redis-queue-data:
   redis-cache-data:
   sites:
   logs:
@@ -123,7 +123,7 @@ services:
       - DEFAULT_WORKSPACE=/config/docker #optional
     volumes:
       - ${DOCKER_DIR}/admin_stack/code-server/config:/config
-      - /home/mdwachira/docker:/config/docker
+      - /home/mdwachira:/config/docker
     networks:
       - proxy
     # ports:
@@ -268,7 +268,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
       - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"      
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
       # - "traefik.http.routers.traefik.middlewares=traefik-auth"
       # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
 
@@ -312,6 +312,7 @@ services:
     command: 'start-from-init --config /example-zitadel-config.yaml --config /example-zitadel-secrets.yaml --steps /example-zitadel-init-steps.yaml --masterkey "SAcD5TY0QPp89ip28bZPfEA5WDxqmobx" --tlsMode external'
     depends_on:
       - cockroach
+      - traefik
     environment:
       - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=mdwachira@gmail.com
       - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=P@s5w04d
@@ -327,7 +328,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`) || (Host(`${DOMAIN}`) && Path(`/zitadel`))"
       - "traefik.http.routers.zitadel.tls=true"
-      - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"  
+      - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"
       - "traefik.http.routers.zitadel.service=zitadel"
       - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
       - "traefik.http.services.zitadel.loadbalancer.passHostHeader=true"
@@ -374,6 +375,7 @@ services:
       - proxy
     depends_on:
       - postgres
+      - traefik
     # ports:
     #   - "8093:80"
     volumes:
@@ -519,7 +521,7 @@ services:
     image: "ghcr.io/arabcoders/watchstate"
     user: "${ENV_PUID}:${ENV_PGID}"
     container_name: watchstate
-    restart: unless-stopped 
+    restart: unless-stopped
     environment:
       - WS_TZ=${TIMEZONE}
       - WS_CRON_IMPORT=1
