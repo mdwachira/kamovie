@@ -158,6 +158,31 @@ services:
       - "traefik.http.routers.jfa-go.tls.certresolver=letsencrypt"
       - "traefik.http.services.jfa-go.loadbalancer.server.port=8056"
 
+  wizarr:
+    container_name: wizarr
+    image: ghcr.io/wizarrrr/wizarr:latest
+    restart: unless-stopped
+    # ports:
+    #   - 5690:5690
+    volumes:
+      - ${DOCKER_DIR}/admin_stack/wizarr:/data/database
+    networks:
+      - proxy
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.wizarr.rule=Host(`wizarr.${DOMAIN}`)'
+      - 'traefik.http.routers.wizarr.tls.certresolver=letsencrypt'
+      - "traefik.http.services.wizarr.loadbalancer.server.port=5690"
+    environment:
+      - APP_URL=https://wizarr.${DOMAIN} #URL at which you will access and share 
+      - MIN_PASSWORD_LENGTH=8 # Minimum password length required for new users (default: 8)
+      - MAX_PASSWORD_LENGTH=20 # Maximum password length for new users (default: 20)
+      - MIN_PASSWORD_UPPERCASE=1 # Minimum password chars that are uppercase (default: 1)
+      - MIN_PASSWORD_NUMBERS=1 # Minimum password chars that are numbers (default: 1)
+      - MIN_PASSWORD_SPECIAL=0 # Minimum password chars that are special (default: 0)
+      - DISABLE_BUILTIN_AUTH=false #Set to true ONLY if you are using another auth provider (Authelia, Authentik, etc)
+      - TZ=Africa/Nairobi #Set your timezone here
+
   ombi:
     image: "lscr.io/linuxserver/ombi"
     container_name: ombi
@@ -269,6 +294,7 @@ services:
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
       - "traefik.http.routers.traefik.service=api@internal"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
       # - "traefik.http.routers.traefik.middlewares=traefik-auth"
       # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
 
@@ -426,7 +452,7 @@ services:
 
   mariadb:
     image: mariadb:10.6
-    hostname: mariadb
+    container_name: mariadb
     healthcheck:
       test: mysqladmin ping -h localhost --password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
       interval: 1s
@@ -855,6 +881,7 @@ services:
   
   backend:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-backend
     deploy:
       restart_policy:
         condition: on-failure
@@ -866,6 +893,7 @@ services:
 
   configurator:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-configurator
     deploy:
       restart_policy:
         condition: none
@@ -887,8 +915,8 @@ services:
     environment:
       - DB_HOST=mariadb
       - DB_PORT=3306
-      - REDIS_CACHE=redis-cache:6379
-      - REDIS_QUEUE=redis-queue:6379
+      - REDIS_CACHE=erpnext-redis-cache:6379
+      - REDIS_QUEUE=erpnext-redis-queue:6379
       - SOCKETIO_PORT=9000
     volumes:
       - sites:/home/frappe/frappe-bench/sites
@@ -896,6 +924,7 @@ services:
 
   create-site:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-create
     deploy:
       restart_policy:
         condition: none
@@ -910,8 +939,8 @@ services:
     command:
       - >
         wait-for-it -t 120 mariadb:3306;
-        wait-for-it -t 120 redis-cache:6379;
-        wait-for-it -t 120 redis-queue:6379;
+        wait-for-it -t 120 erpnext-redis-cache:6379;
+        wait-for-it -t 120 erpnext-redis-queue:6379;
         export start=`date +%s`;
         until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
           [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
@@ -931,10 +960,10 @@ services:
         bench get-app payments --branch version-15 --resolve-deps && bench --site demo.enext.duckdns.org install-app payments;
         bench get-app hrms --branch version-15 && bench --site demo.enext.duckdns.org install-app hrms;
         bench get-app helpdesk --resolve-deps && bench --site demo.enext.duckdns.org install-app helpdesk;
-        bench get-app --branch main insights --resolve-deps && bench --site demo.enext.duckdns.org install-app insights;
 
   demo-erpnext:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-site-demo
     deploy:
       restart_policy:
         condition: on-failure
@@ -943,9 +972,9 @@ services:
     command:
       - nginx-entrypoint.sh
     environment:
-      - BACKEND=backend:8000
+      - BACKEND=erpnext-backend:8000
       - FRAPPE_SITE_NAME_HEADER=demo.enext.duckdns.org
-      - SOCKETIO=websocket:9000
+      - SOCKETIO=erpnext-websocket:9000
       - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
       - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
       - UPSTREAM_REAL_IP_RECURSIVE=off
@@ -956,9 +985,15 @@ services:
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
     ports:
       - "8080:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.erpnext-demo.rule=Host(`demo.enext.duckdns.org`)"
+      - "traefik.http.routers.erpnext-demo.tls.certresolver=letsencrypt"
+      - "traefik.http.services.erpnext-demo.loadbalancer.server.port=8080"
 
   queue-long:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-queue-long
     deploy:
       restart_policy:
         condition: on-failure
@@ -975,6 +1010,7 @@ services:
 
   queue-short:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-queue-short
     deploy:
       restart_policy:
         condition: on-failure
@@ -991,6 +1027,7 @@ services:
 
   redis-queue:
     image: redis:6.2-alpine
+    container_name: erpnext-redis-queue
     deploy:
       restart_policy:
         condition: on-failure
@@ -1001,6 +1038,7 @@ services:
 
   redis-cache:
     image: redis:6.2-alpine
+    container_name: erpnext-redis-cache
     deploy:
       restart_policy:
         condition: on-failure
@@ -1011,6 +1049,7 @@ services:
 
   scheduler:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-scheduler
     deploy:
       restart_policy:
         condition: on-failure
@@ -1025,6 +1064,7 @@ services:
 
   websocket:
     image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-websocket
     deploy:
       restart_policy:
         condition: on-failure
