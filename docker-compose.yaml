@@ -61,26 +61,26 @@ services:
      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
 
-  dockge:
-    image: "docker.io/louislam/dockge:latest"
-    container_name: dockge
-    hostname: dockge.local
-    restart: unless-stopped
-    networks:
-      - proxy
-    # ports:
-    #   - '5001:5001'
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${DOCKER_DIR}/admin_stack/dockge/data:/app/data
-      - ${DOCKER_DIR}:/home/mdwachira/docker
-    environment:
-      - DOCKGE_STACKS_DIR=/home/mdwachira/docker
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dockge.rule=Host(`dge.${DOMAIN}`)"
-      - "traefik.http.routers.dockge.tls.certresolver=letsencrypt"
-      - "traefik.http.services.dockge.loadbalancer.server.port=5001"
+  # dockge:
+  #   image: "docker.io/louislam/dockge:latest"
+  #   container_name: dockge
+  #   hostname: dockge.local
+  #   restart: unless-stopped
+  #   networks:
+  #     - proxy
+  #   # ports:
+  #   #   - '5001:5001'
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ${DOCKER_DIR}/admin_stack/dockge/data:/app/data
+  #     - ${DOCKER_DIR}:/home/mdwachira/docker
+  #   environment:
+  #     - DOCKGE_STACKS_DIR=/home/mdwachira/docker
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.dockge.rule=Host(`dge.${DOMAIN}`)"
+  #     - "traefik.http.routers.dockge.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.dockge.loadbalancer.server.port=5001"
 
   homarr:
     image: "ghcr.io/ajnart/homarr"
@@ -387,22 +387,22 @@ services:
   #     - "traefik.http.routers.pgadmin.rule=Host(`pg.${DOMAIN}`)"
   #     - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
 
-  cockroach_cert:
-    image: "cockroachdb/cockroach:latest"
-    container_name: cockroach_cert
-    networks:
-      - "database"
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      [
-        "cp /certs/* /zitadel-certs/ && cockroach cert create-client --overwrite --certs-dir /zitadel-certs/ --ca-key /zitadel-certs/ca.key zitadel_user && chown 1000:1000 /zitadel-certs/*",
-      ]
-    volumes:
-      - ${DOCKER_DIR}/database_stack/cockroach/cert:/certs:ro
-      - ${DOCKER_DIR}/network_stack/zitadel/cert:/zitadel-certs:rw
-    depends_on:
-      cockroach:
-        condition: "service_healthy"
+  # cockroach_cert:
+  #   image: "cockroachdb/cockroach:latest"
+  #   container_name: cockroach_cert
+  #   networks:
+  #     - "database"
+  #   entrypoint: ["/bin/bash", "-c"]
+  #   command:
+  #     [
+  #       "cp /certs/* /zitadel-certs/ && cockroach cert create-client --overwrite --certs-dir /zitadel-certs/ --ca-key /zitadel-certs/ca.key zitadel_user && chown 1000:1000 /zitadel-certs/*",
+  #     ]
+  #   volumes:
+  #     - ${DOCKER_DIR}/database_stack/cockroach/cert:/certs:ro
+  #     - ${DOCKER_DIR}/network_stack/zitadel/cert:/zitadel-certs:rw
+  #   depends_on:
+  #     cockroach:
+  #       condition: "service_healthy"
 
   cockroach:
     restart: "always"
@@ -423,6 +423,30 @@ services:
     volumes:
       - ${DOCKER_DIR}/database_stack/cockroach/cert:/cockroach/certs:rw
       - ${DOCKER_DIR}/database_stack/cockroach/data:/cockroach/cockroach-data:rw
+
+  mariadb:
+    image: mariadb:10.6
+    hostname: mariadb
+    healthcheck:
+      test: mysqladmin ping -h localhost --password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
+      interval: 1s
+      retries: 15
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - database
+      - finance
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
+    environment:
+      - MYSQL_ROOT_PASSWORD=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
+    volumes:
+      - ${DOCKER_DIR}/database_stack/mariadb/db:/var/lib/mysql
+
 
 #####################################################
 #                Monitoring Stack                   #              
@@ -828,241 +852,190 @@ services:
 #####################################################
 #                 Finance Stack                     #              
 #####################################################
+  
+  backend:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  # backend:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
+  configurator:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: none
+    networks:
+      - finance
+    entrypoint:
+      - bash
+      - -c
+    # add redis_socketio for backward compatibility
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+    environment:
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - REDIS_CACHE=redis-cache:6379
+      - REDIS_QUEUE=redis-queue:6379
+      - SOCKETIO_PORT=9000
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  # configurator:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: none
-  #   entrypoint:
-  #     - bash
-  #     - -c
-  #   # add redis_socketio for backward compatibility
-  #   command:
-  #     - >
-  #       ls -1 apps > sites/apps.txt;
-  #       bench set-config -g db_host $$DB_HOST;
-  #       bench set-config -gp db_port $$DB_PORT;
-  #       bench set-config -g redis_cache "redis://$$REDIS_CACHE";
-  #       bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
-  #       bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
-  #       bench set-config -gp socketio_port $$SOCKETIO_PORT;
+  create-site:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: none
+    networks:
+      - finance
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        wait-for-it -t 120 mariadb:3306;
+        wait-for-it -t 120 redis-cache:6379;
+        wait-for-it -t 120 redis-queue:6379;
+        export start=`date +%s`;
+        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
+          [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
+        do
+          echo "Waiting for sites/common_site_config.json to be created";
+          sleep 5;
+          if (( `date +%s`-start > 120 )); then
+            echo "could not find sites/common_site_config.json with required keys";
+            exit 1
+          fi
+        done;
+        echo "sites/common_site_config.json found";
+        pip install --upgrade pip;
+        pip3 install --upgrade frappe-bench;
+        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H --install-app erpnext --set-default demo.enext.duckdns.org;
+        bench get-app payments --branch version-15 --resolve-deps && bench --site demo.enext.duckdns.org install-app payments;
+        bench get-app hrms --branch version-15 && bench --site demo.enext.duckdns.org install-app hrms;
+        bench get-app helpdesk --resolve-deps && bench --site demo.enext.duckdns.org install-app helpdesk;
+        bench get-app --branch main insights --resolve-deps && bench --site demo.enext.duckdns.org install-app insights;
 
-  #   environment:
-  #     DB_HOST: db
-  #     DB_PORT: "3306"
-  #     REDIS_CACHE: redis-cache:6379
-  #     REDIS_QUEUE: redis-queue:6379
-  #     SOCKETIO_PORT: "9000"
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
+  demo-erpnext:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      - BACKEND=backend:8000
+      - FRAPPE_SITE_NAME_HEADER=demo.enext.duckdns.org
+      - SOCKETIO=websocket:9000
+      - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
+      - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
+      - UPSTREAM_REAL_IP_RECURSIVE=off
+      - PROXY_READ_TIMEOUT=120
+      - CLIENT_MAX_BODY_SIZE=50m
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+    ports:
+      - "8080:8080"
 
-  # create-site:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: none
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
-  #   entrypoint:
-  #     - bash
-  #     - -c
-  #   command:
-  #     - >
-  #       wait-for-it -t 120 db:3306;
-  #       wait-for-it -t 120 redis-cache:6379;
-  #       wait-for-it -t 120 redis-queue:6379;
-  #       export start=`date +%s`;
-  #       until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".db_host // empty"` ]] && \
-  #         [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_cache // empty"` ]] && \
-  #         [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]];
-  #       do
-  #         echo "Waiting for sites/common_site_config.json to be created";
-  #         sleep 5;
-  #         if (( `date +%s`-start > 120 )); then
-  #           echo "could not find sites/common_site_config.json with required keys";
-  #           exit 1
-  #         fi
-  #       done;
-  #       echo "sites/common_site_config.json found";
-  #       echo "bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext --set-default frontend";
-  #       bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext erp.kamovie.duckdns.org;
-  #       bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=P4s5w04d --install-app erpnext demo.kamovie.duckdns.org;
+  queue-long:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    command:
+      - bench
+      - worker
+      - --queue
+      - long,default,short
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  # db:
-  #   image: mariadb:10.6
-  #   healthcheck:
-  #     test: mysqladmin ping -h localhost --password=P4s5w04d
-  #     interval: 1s
-  #     retries: 15
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - --character-set-server=utf8mb4
-  #     - --collation-server=utf8mb4_unicode_ci
-  #     - --skip-character-set-client-handshake
-  #     - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
-  #   environment:
-  #     - MYSQL_ROOT_HOST=%
-  #     - MYSQL_ROOT_PASSWORD=P4s5w04d
-  #   volumes:
-  #     - db-data:/var/lib/mysql
+  queue-short:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    command:
+      - bench
+      - worker
+      - --queue
+      - short,default
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  # site_default:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - nginx-entrypoint.sh
-  #   environment:
-  #     BACKEND: backend:8000
-  #     FRAPPE_SITE_NAME_HEADER: frontend
-  #     SOCKETIO: websocket:9000
-  #     UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
-  #     UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
-  #     UPSTREAM_REAL_IP_RECURSIVE: "off"
-  #     PROXY_READ_TIMEOUT: 120
-  #     CLIENT_MAX_BODY_SIZE: 50m
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
-  #   ports:
-  #     - "8080:8080"
+  redis-queue:
+    image: redis:6.2-alpine
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    volumes:
+      - redis-queue-data:/data
 
-  # site_erp:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - nginx-entrypoint.sh
-  #   environment:
-  #     BACKEND: backend:8000
-  #     FRAPPE_SITE_NAME_HEADER: erp.kamovie.duckdns.org
-  #     SOCKETIO: websocket:9000
-  #     UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
-  #     UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
-  #     UPSTREAM_REAL_IP_RECURSIVE: "off"
-  #     PROXY_READ_TIMEOUT: 120
-  #     CLIENT_MAX_BODY_SIZE: 50m
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
-  #   # ports:
-  #   #   - "8081:8080"
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.site_erp.rule=Host(`erp.${DOMAIN}`)"
-  #     - "traefik.http.routers.site_erp.tls.certresolver=letsencrypt"
-  #     - "traefik.http.services.site_erp.loadbalancer.server.port=8080"
+  redis-cache:
+    image: redis:6.2-alpine
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    volumes:
+      - redis-cache-data:/data
 
-  # site_demo:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - nginx-entrypoint.sh
-  #   environment:
-  #     BACKEND: backend:8000
-  #     FRAPPE_SITE_NAME_HEADER: demo.kamovie.duckdns.org
-  #     SOCKETIO: websocket:9000
-  #     UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
-  #     UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
-  #     UPSTREAM_REAL_IP_RECURSIVE: "off"
-  #     PROXY_READ_TIMEOUT: 120
-  #     CLIENT_MAX_BODY_SIZE: 50m
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
-  #   # ports:
-  #   #   - "8082:8080"
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.site_demo.rule=Host(`demo.${DOMAIN}`)"
-  #     - "traefik.http.routers.site_demo.tls.certresolver=letsencrypt"
-  #     - "traefik.http.services.site_demo.loadbalancer.server.port=8080"
+  scheduler:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    command:
+      - bench
+      - schedule
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  # queue-long:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - bench
-  #     - worker
-  #     - --queue
-  #     - long,default,short
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
-
-  # queue-short:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - bench
-  #     - worker
-  #     - --queue
-  #     - short,default
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
-
-  # redis-queue:
-  #   image: redis:alpine
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   volumes:
-  #     - redis-queue-data:/data
-
-  # redis-cache:
-  #   image: redis:alpine
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   volumes:
-  #     - redis-cache-data:/data
-
-  # scheduler:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - bench
-  #     - schedule
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
-
-  # websocket:
-  #   image: frappe/erpnext:${ERPNEXT_VERSION}
-  #   deploy:
-  #     restart_policy:
-  #       condition: on-failure
-  #   command:
-  #     - node
-  #     - /home/frappe/frappe-bench/apps/frappe/socketio.js
-  #   volumes:
-  #     - sites:/home/frappe/frappe-bench/sites
-  #     - logs:/home/frappe/frappe-bench/logs
+  websocket:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
 #####################################################
 #                   Admin Stack                     #              
