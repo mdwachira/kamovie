@@ -5,17 +5,24 @@ The separated folder contains separate compose files depending on the services y
 
 
 
-Please see below script to be run to set up Frappe HR
+Please see below script to set up ERPNext.
+Step 1: Set up initial side
 ```
-docker compose exec erpnext-backend \
+docker exec erpnext-backend \
   bench new-site one.example.com --mariadb-root-password StrongPassw0rd --install-app erpnext --admin-password StrongPassw0rd
-
-docker compose --project-name erpnext-one exec backend \
+```
+Step 2: Set up additional site
+```
+docker exec backend \
   bench new-site two.example.com --mariadb-root-password StrongPassw0rd --install-app erpnext --admin-password StrongPassw0rd
-
+```
+Step 3: Install payments module
+```
 docker exec erpnext-backend \
   bench get-app payments --branch version-15 && bench --site demo.enext.duckdns.org install-app payments
-
+```
+Step 4: Install Frappe HR module
+```
 docker exec erpnext-backend \
   bench get-app hrms --branch version-15 && bench --site demo.enext.duckdns.org install-app hrms
 ```
