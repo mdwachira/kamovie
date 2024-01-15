@@ -13,11 +13,11 @@ volumes:
   crowdsec-db:
   crowdsec-config:
   database:
-  db-data:
   redis-queue-data:
   redis-cache-data:
   sites:
   logs:
+  assets:
 
 networks:
   streaming:
@@ -954,14 +954,10 @@ services:
           fi
         done;
         echo "sites/common_site_config.json found";
-        pip install --upgrade pip;
-        pip3 install --upgrade frappe-bench;
         bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H --install-app erpnext --set-default demo.enext.duckdns.org;
-        bench get-app payments --branch version-15 --resolve-deps && bench --site demo.enext.duckdns.org install-app payments;
-        bench get-app hrms --branch version-15 && bench --site demo.enext.duckdns.org install-app hrms;
-        bench get-app helpdesk --resolve-deps && bench --site demo.enext.duckdns.org install-app helpdesk;
+        bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H --install-app erpnext slewa.enext.duckdns.org;
 
-  demo-erpnext:
+  erpnext-site-1:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-site-demo
     deploy:
@@ -969,6 +965,7 @@ services:
         condition: on-failure
     networks:
       - finance
+      - proxy
     command:
       - nginx-entrypoint.sh
     environment:
@@ -983,11 +980,42 @@ services:
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-    ports:
-      - "8080:8080"
+    # ports:
+    #   - "8080:8080"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.erpnext-demo.rule=Host(`demo.enext.duckdns.org`)"
+      - "traefik.http.routers.erpnext-demo.tls.certresolver=letsencrypt"
+      - "traefik.http.services.erpnext-demo.loadbalancer.server.port=8080"
+
+  erpnext-site-2:
+    image: frappe/erpnext:${ERPNEXT_VERSION}
+    container_name: erpnext-site-slewa
+    deploy:
+      restart_policy:
+        condition: on-failure
+    networks:
+      - finance
+      - proxy
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      - BACKEND=erpnext-backend:8000
+      - FRAPPE_SITE_NAME_HEADER=slewa.enext.duckdns.org
+      - SOCKETIO=erpnext-websocket:9000
+      - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
+      - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
+      - UPSTREAM_REAL_IP_RECURSIVE=off
+      - PROXY_READ_TIMEOUT=120
+      - CLIENT_MAX_BODY_SIZE=50m
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+    # ports:
+    #   - "8080:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.erpnext-demo.rule=Host(`slewa.enext.duckdns.org`)"
       - "traefik.http.routers.erpnext-demo.tls.certresolver=letsencrypt"
       - "traefik.http.services.erpnext-demo.loadbalancer.server.port=8080"
 
