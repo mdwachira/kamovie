@@ -43,10 +43,12 @@ services:
 #####################################################
 
   portainer:
-    image: "docker.io/portainer/portainer-ce"
+    image: "portainer/portainer-ce"
     container_name: portainer
     hostname: portainer.local
     restart: unless-stopped
+    depends_on:
+      - traefik
     networks:
       - proxy
     # ports:
@@ -62,7 +64,7 @@ services:
      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
 
   # dockge:
-  #   image: "docker.io/louislam/dockge:latest"
+  #   image: "louislam/dockge:latest"
   #   container_name: dockge
   #   hostname: dockge.local
   #   restart: unless-stopped
@@ -86,6 +88,8 @@ services:
     image: "ghcr.io/ajnart/homarr"
     container_name: homarr
     hostname: home.local
+    depends_on:
+      - traefik
     volumes:
       - ${DOCKER_DIR}/admin_stack/homarr/configs:/app/data/configs
       - ${DOCKER_DIR}/admin_stack/homarr/data:/data
@@ -111,6 +115,8 @@ services:
     image: "lscr.io/linuxserver/code-server"
     container_name: code-server
     hostname: code.local
+    depends_on:
+      - traefik
     environment:
       - PUID=${ENV_PUID}
       - PGID=${ENV_PGID}
@@ -140,6 +146,8 @@ services:
     restart: unless-stopped
     container_name: jfa_go
     hostname: jfa_go
+    depends_on:
+      - traefik
     environment:
       - PUID=${ENV_PUID}
       - PGID=${ENV_PGID}
@@ -162,6 +170,8 @@ services:
     container_name: wizarr
     image: ghcr.io/wizarrrr/wizarr:latest
     restart: unless-stopped
+    depends_on:
+      - traefik
     # ports:
     #   - 5690:5690
     volumes:
@@ -187,6 +197,8 @@ services:
     image: "lscr.io/linuxserver/ombi"
     container_name: ombi
     hostname: ombi.local
+    depends_on:
+      - traefik
     networks:
       - proxy
     environment:
@@ -207,6 +219,8 @@ services:
   jellyseerr:
     image: "fallenbagel/jellyseerr:latest"
     container_name: jellyseerr
+    depends_on:
+      - traefik
     environment:
       - LOG_LEVEL=debug
       - PUID=${ENV_PUID}
@@ -230,6 +244,8 @@ services:
     image: "lscr.io/linuxserver/tautulli"
     container_name: tautulli
     hostname: tautulli.local
+    depends_on:
+      - traefik
     networks:
       - proxy
     environment:
@@ -252,6 +268,8 @@ services:
     image: "lscr.io/linuxserver/overseerr"
     container_name: overseerr
     hostname: overseerr.local
+    depends_on:
+      - traefik
     networks:
       - proxy
     # ports:
@@ -292,9 +310,9 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      # - "traefik.http.routers.traefik.entrypoints=websecure"
       - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
-      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"      
       # - "traefik.http.routers.traefik.middlewares=traefik-auth"
       # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
 
@@ -484,6 +502,8 @@ services:
     hostname: dash.local
     restart: unless-stopped
     privileged: true
+    depends_on:
+      - traefik
     networks:
       - proxy
     # ports:
@@ -522,6 +542,8 @@ services:
     image: "docker.io/louislam/uptime-kuma"
     restart: unless-stopped
     container_name: uptime_kuma
+    depends_on:
+      - traefik
     networks:
       - proxy
     # ports:
@@ -540,6 +562,8 @@ services:
     image: "amir20/dozzle"
     restart: unless-stopped
     container_name: dozzle
+    depends_on:
+      - traefik
     networks:
       - proxy
     # ports:
@@ -572,6 +596,9 @@ services:
     user: "${ENV_PUID}:${ENV_PGID}"
     container_name: watchstate
     restart: unless-stopped
+    depends_on:
+      - plex
+      - jellyfin
     environment:
       - WS_TZ=${TIMEZONE}
       - WS_CRON_IMPORT=1
@@ -618,6 +645,8 @@ services:
     image: "jellyfin/jellyfin"
     container_name: jellyfin
     hostname: jellyfin.local
+    depends_on:
+      - traefik
     # ports:
     #   - '8097:8096'
     networks:
@@ -646,6 +675,8 @@ services:
     image: "lscr.io/linuxserver/calibre-web"
     container_name: calibre-web
     hostname: calibre-web.local
+    depends_on:
+      - traefik
     # ports:
     #   - '8098:8083'
     networks:
@@ -879,19 +910,23 @@ services:
 #                 Finance Stack                     #              
 #####################################################
   
-  backend:
+  erpnext-backend:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-backend
     deploy:
       restart_policy:
         condition: on-failure
+    depends_on:
+      - mariadb
+      - erpnext-redis-cache
+      - erpnext-redis-queue
     networks:
       - finance
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  configurator:
+  erpnext-configurator:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-configurator
     deploy:
@@ -922,7 +957,7 @@ services:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  create-site:
+  erpnext-create:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-create
     deploy:
@@ -963,6 +998,9 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
+    depends_on:
+      - traefik
+      - erpnext-backend
     networks:
       - finance
       - proxy
@@ -980,13 +1018,13 @@ services:
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-    # ports:
-    #   - "8080:8080"
+    ports:
+      - "8080:8080"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.erpnext-demo.rule=Host(`demo.enext.duckdns.org`)"
-      - "traefik.http.routers.erpnext-demo.tls.certresolver=letsencrypt"
-      - "traefik.http.services.erpnext-demo.loadbalancer.server.port=8080"
+      - "traefik.http.routers.erpnext-site-1.rule=Host(`demo.enext.duckdns.org`)"
+      - "traefik.http.routers.erpnext-site-1.tls.certresolver=letsencrypt"
+      - "traefik.http.services.erpnext-site-1.loadbalancer.server.port=8080"
 
   erpnext-site-2:
     image: frappe/erpnext:${ERPNEXT_VERSION}
@@ -994,6 +1032,9 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
+    depends_on:
+      - traefik
+      - erpnext-backend
     networks:
       - finance
       - proxy
@@ -1011,15 +1052,15 @@ services:
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-    # ports:
-    #   - "8080:8080"
+    ports:
+      - "18095:8080"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.erpnext-demo.rule=Host(`slewa.enext.duckdns.org`)"
-      - "traefik.http.routers.erpnext-demo.tls.certresolver=letsencrypt"
-      - "traefik.http.services.erpnext-demo.loadbalancer.server.port=8080"
+      - "traefik.http.routers.erpnext-site-2.rule=Host(`slewa.enext.duckdns.org`)"
+      - "traefik.http.routers.erpnext-site-2.tls.certresolver=letsencrypt"
+      - "traefik.http.services.erpnext-site-2.loadbalancer.server.port=8080"
 
-  queue-long:
+  erpnext-queue-long:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-queue-long
     deploy:
@@ -1036,7 +1077,7 @@ services:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  queue-short:
+  erpnext-queue-short:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-queue-short
     deploy:
@@ -1053,7 +1094,7 @@ services:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  redis-queue:
+  erpnext-redis-queue:
     image: redis:6.2-alpine
     container_name: erpnext-redis-queue
     deploy:
@@ -1064,7 +1105,7 @@ services:
     volumes:
       - redis-queue-data:/data
 
-  redis-cache:
+  erpnext-redis-cache:
     image: redis:6.2-alpine
     container_name: erpnext-redis-cache
     deploy:
@@ -1075,7 +1116,7 @@ services:
     volumes:
       - redis-cache-data:/data
 
-  scheduler:
+  erpnext-scheduler:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-scheduler
     deploy:
@@ -1090,7 +1131,7 @@ services:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  websocket:
+  erpnext-websocket:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-websocket
     deploy:
