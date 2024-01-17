@@ -9,15 +9,13 @@ secrets:
     file: ${SECRETS_DIR}/password
 
 volumes:
-  redis:
   crowdsec-db:
   crowdsec-config:
-  database:
-  redis-queue-data:
-  redis-cache-data:
+  erpnext-queue:
+  erpnext-cache:
+  erpnext-sites:
   sites:
-  logs:
-  assets:
+  authentik-cache:
 
 networks:
   streaming:
@@ -300,6 +298,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # - "8080:8080"
     environment:
       - DUCKDNS_TOKEN=${DUCKDNS_TOKEN}
     volumes:
@@ -321,7 +320,7 @@ services:
     container_name: crowdsec
     environment:
       - 'GID=${ENV_PGID}'
-      - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik'
+      - 'COLLECTIONS=crowdsecurity/linux crowdsecurity/traefik LePresidente/jellyfin firix/authentik crowdsecurity/palo-alto fulljackz/proxmox'
     depends_on:
       - 'traefik'
     volumes:
@@ -345,38 +344,151 @@ services:
     depends_on:
       - crowdsec
 
-  zitadel:
-    image: "ghcr.io/zitadel/zitadel:stable"
+  # zitadel:
+  #   image: "ghcr.io/zitadel/zitadel:stable"
+  #   container_name: zitadel
+  #   restart: unless-stopped
+  #   networks:
+  #     - database
+  #     - proxy
+  #   # ZITADEL_MASTERKEY: 'Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju' # run tr -dc A-Za-z0-9 </dev/urandom | head -c 32
+  #   command: 'start-from-init --config /example-zitadel-config.yaml --config /example-zitadel-secrets.yaml --steps /example-zitadel-init-steps.yaml --masterkey "SAcD5TY0QPp89ip28bZPfEA5WDxqmobx" --tlsMode external'
+  #   depends_on:
+  #     - cockroach
+  #     - traefik
+  #   environment:
+  #     - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=mdwachira@gmail.com
+  #     - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=P@s5w04d
+  #     - ZITADEL_MASTERKEY=Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju
+  #   # ports:
+  #   #   - "8080:8080"
+  #   volumes:
+  #     - ${DOCKER_DIR}/network_stack/zitadel/config.yaml:/example-zitadel-config.yaml:ro
+  #     - ${DOCKER_DIR}/network_stack/zitadel/secrets.yaml:/example-zitadel-secrets.yaml:ro
+  #     - ${DOCKER_DIR}/network_stack/zitadel/init-steps.yaml:/example-zitadel-init-steps.yaml:ro
+  #     - ${DOCKER_DIR}/network_stack/zitadel/cert:/crdb-certs:ro
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`)"
+  #     - "traefik.http.routers.zitadel.tls=true"
+  #     - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"
+  #     - "traefik.http.routers.zitadel.service=zitadel"
+  #     - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
+  #     - "traefik.http.services.zitadel.loadbalancer.passHostHeader=true"
+  #     - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
+      
+  # authelia:
+  #   image: 'authelia/authelia'
+  #   container_name: authelia
+  #   restart: unless-stopped
+  #   environment:
+  #     - PUID=${ENV_PUID}
+  #     - PGID=${ENV_PGID}
+  #     - TZ=${TIMEZONE}
+  #     - AUTHELIA_JWT_SECRET_FILE=/secrets/JWT_SECRET
+  #     - AUTHELIA_SESSION_SECRET_FILE=/secrets/SESSION_SECRET
+  #     - AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE=/secrets/STORAGE_PASSWORD
+  #     - AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/secrets/STORAGE_ENCRYPTION_KEY
+  #   volumes:
+  #     - ${DOCKER_DIR}/network_stack/authelia/config:/config
+  #     - ./.secrets:/secrets
+  #   labels:
+  #     - 'traefik.enable=true'
+  #     - 'traefik.http.routers.authelia.rule=Host(`oauth.${DOMAIN}`)'
+  #     # - 'traefik.http.routers.authelia.entrypoints=websecure'
+  #     # - 'traefik.http.routers.authelia.tls=true'
+  #     - 'traefik.http.routers.authelia.tls.certresolver=letsencrypt'
+  #     - 'traefik.http.services.authelia.loadbalancer.server.port=9091'
+  #     - 'traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/verify?rd=https://oauth.${DOMAIN}'
+  #     - 'traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true'
+  #     - 'traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email'
+  #   networks:
+  #     - proxy
+  #     - database
+  #   expose:
+  #     - 9091
+  #   depends_on:
+  #     - traefik
+  #     - postgres
+
+  authentik:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
+    container_name: authentik
     restart: unless-stopped
-    container_name: zitadel
+    command: server
+    environment:
+      - AUTHENTIK_REDIS__HOST=authentik-cache
+      - AUTHENTIK_POSTGRESQL__HOST=postgres
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PG_PASS}
+    volumes:
+      - ${DOCKER_DIR}/network_stack/authentik/media:/media
+      - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
+    env_file:
+      - .env
     networks:
       - database
       - proxy
-    # ZITADEL_MASTERKEY: 'Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju' # run tr -dc A-Za-z0-9 </dev/urandom | head -c 32
-    command: 'start-from-init --config /example-zitadel-config.yaml --config /example-zitadel-secrets.yaml --steps /example-zitadel-init-steps.yaml --masterkey "SAcD5TY0QPp89ip28bZPfEA5WDxqmobx" --tlsMode external'
+    ports:
+      - "${COMPOSE_PORT_HTTP:-9000}:9000"
+      - "${COMPOSE_PORT_HTTPS:-9443}:9443"
     depends_on:
-      - cockroach
-      - traefik
-    environment:
-      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=mdwachira@gmail.com
-      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=P@s5w04d
-      - ZITADEL_MASTERKEY=Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju
-    # ports:
-    #   - "8080:8080"
-    volumes:
-      - ${DOCKER_DIR}/network_stack/zitadel/config.yaml:/example-zitadel-config.yaml:ro
-      - ${DOCKER_DIR}/network_stack/zitadel/secrets.yaml:/example-zitadel-secrets.yaml:ro
-      - ${DOCKER_DIR}/network_stack/zitadel/init-steps.yaml:/example-zitadel-init-steps.yaml:ro
-      - ${DOCKER_DIR}/network_stack/zitadel/cert:/crdb-certs:ro
+      - postgres
+      - authentik-cache
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`)"
-      - "traefik.http.routers.zitadel.tls=true"
-      - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.zitadel.service=zitadel"
-      - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
-      - "traefik.http.services.zitadel.loadbalancer.passHostHeader=true"
-      - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
+      - traefik.http.routers.authentik.rule=Host(`oauth.${DOMAIN}`) || HostRegexp(`{subdomain:[A-Za-z0-9](?:[A-Za-z0-9\-]{0,61}[A-Za-z0-9])?}.${DOMAIN}`) && PathPrefix(`/outpost.goauthentik.io/`)
+      - "traefik.http.routers.authentik.tls.certresolver=letsencrypt"
+
+  authentik-worker:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
+    container_name: authentik-worker
+    restart: unless-stopped
+    command: worker
+    environment:
+      - AUTHENTIK_REDIS__HOST=authentik-cache
+      - AUTHENTIK_POSTGRESQL__HOST=postgres
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PG_PASS}
+    # `user: root` and the docker socket volume are optional.
+    # See more for the docker socket integration here:
+    # https://goauthentik.io/docs/outposts/integrations/docker
+    # Removing `user: root` also prevents the worker from fixing the permissions
+    # on the mounted folders, so when removing this make sure the folders have the correct UID/GID
+    # (1000:1000 by default)
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_DIR}/network_stack/authentik/media:/media
+      - ${DOCKER_DIR}/network_stack/authentik/certs:/certs
+      - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
+    env_file:
+      - .env
+    networks:
+      - database
+      - proxy
+    depends_on:
+      - postgres
+      - authentik-cache
+  
+  authentik-cache:
+    image: docker.io/library/redis:alpine
+    container_name: authentik-cache
+    command: --save 60 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    networks:
+      # - database
+      - proxy
+    volumes:
+      - authentik-cache:/data
 
 #####################################################
 #                   Database Stack                  #              
@@ -385,9 +497,10 @@ services:
   postgres:
     image: docker.io/library/postgres:12-alpine
     container_name: postgres
+    # hostname: postgres
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -d $${PG_DB} -U $${USER}"]
       start_period: 20s
       interval: 30s
       retries: 5
@@ -396,7 +509,7 @@ services:
       - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
     networks:
       - database
-      - proxy
+      # - proxy
     # ports:
     #   - "8093:80"
     environment:
@@ -448,25 +561,25 @@ services:
   #     cockroach:
   #       condition: "service_healthy"
 
-  cockroach:
-    restart: "always"
-    networks:
-      - "database"
-    image: "cockroachdb/cockroach:latest"
-    container_name: cockroach
-    command: "start-single-node --advertise-addr cockroach"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
-      interval: "10s"
-      timeout: "30s"
-      retries: 5
-      start_period: "20s"
-    # ports:
-    #   - "9090:8080"
-    #   - "26257:26257"
-    volumes:
-      - ${DOCKER_DIR}/database_stack/cockroach/cert:/cockroach/certs:rw
-      - ${DOCKER_DIR}/database_stack/cockroach/data:/cockroach/cockroach-data:rw
+  # cockroach:
+  #   restart: "always"
+  #   networks:
+  #     - "database"
+  #   image: "cockroachdb/cockroach:latest"
+  #   container_name: cockroach
+  #   command: "start-single-node --advertise-addr cockroach"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
+  #     interval: "10s"
+  #     timeout: "30s"
+  #     retries: 5
+  #     start_period: "20s"
+  #   # ports:
+  #   #   - "9090:8080"
+  #   #   - "26257:26257"
+  #   volumes:
+  #     - ${DOCKER_DIR}/database_stack/cockroach/cert:/cockroach/certs:rw
+  #     - ${DOCKER_DIR}/database_stack/cockroach/data:/cockroach/cockroach-data:rw
 
   mariadb:
     image: mariadb:10.6
@@ -490,7 +603,6 @@ services:
       - MYSQL_ROOT_PASSWORD=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
     volumes:
       - ${DOCKER_DIR}/database_stack/mariadb/db:/var/lib/mysql
-
 
 #####################################################
 #                Monitoring Stack                   #              
@@ -534,9 +646,10 @@ services:
       - WATCHTOWER_INCLUDE_STOPPED=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=7200
+      - WATCHTOWER_SCHEDULE=0 3 * * 0
       - WATCHTOWER_NOTIFICATIONS_LEVEL=debug
-      - WATCHTOWER_NO_STARTUP_MESSAGE=true
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_DISABLE_CONTAINERS=postgres,mariadb
 
   uptime_kuma:
     image: "docker.io/louislam/uptime-kuma"
@@ -556,7 +669,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.uptime.rule=Host(`up.${DOMAIN}`)"
       - "traefik.http.routers.uptime.tls.certresolver=letsencrypt"
-      - "traefik.http.services.uptime.loadbalancer.server.port=9000"
+      - "traefik.http.services.uptime.loadbalancer.server.port=3001"
 
   dozzle:
     image: "amir20/dozzle"
@@ -1018,8 +1131,8 @@ services:
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-    ports:
-      - "8080:8080"
+    # ports:
+    #   - "8080:8080"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.erpnext-site-1.rule=Host(`demo.enext.duckdns.org`)"
@@ -1052,8 +1165,8 @@ services:
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-    ports:
-      - "18095:8080"
+    # ports:
+    #   - "18095:8080"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.erpnext-site-2.rule=Host(`slewa.enext.duckdns.org`)"
@@ -1103,7 +1216,7 @@ services:
     networks:
       - finance
     volumes:
-      - redis-queue-data:/data
+      - erpnext-queue:/data
 
   erpnext-redis-cache:
     image: redis:6.2-alpine
@@ -1114,7 +1227,7 @@ services:
     networks:
       - finance
     volumes:
-      - redis-cache-data:/data
+      - erpnext-cache:/data
 
   erpnext-scheduler:
     image: frappe/erpnext:${ERPNEXT_VERSION}
