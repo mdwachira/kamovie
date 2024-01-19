@@ -437,9 +437,9 @@ services:
       - postgres
       - authentik-cache
     labels:
-      - traefik.enable=true
-      # - traefik.http.routers.authentik.entryPoints=websecure
-      - traefik.http.routers.authentik.rule=Host(`oauth.${DOMAIN}`) || HostRegexp(`{subdomain:[a-z0-9]+}.${DOMAIN}`) && PathPrefix(`/outpost.goauthentik.io/`)
+      - "traefik.enable=true"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+      - "traefik.http.routers.authentik.rule=Host(`oauth.${DOMAIN}`) || HostRegexp(`{subdomain:[a-z0-9]+}.${DOMAIN}`) && PathPrefix(`/outpost.goauthentik.io/`)"
 
   authentik-worker:
     image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
