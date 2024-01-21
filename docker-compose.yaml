@@ -289,6 +289,22 @@ services:
 #                   Network Stack                   #              
 #####################################################
 
+  tailscale:
+    image: "tailscale/tailscale:latest"
+    container_name: tailscale
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - TS_AUTHKEY=tskey-auth-k6uHJ83CNTRL-4EBWT3Smi74ARmdrjBtC84QYgfd2x1FJ
+      - TS_EXTRA_ARGS=--advertise-exit-node
+      # - TS_ROUTES=[SUBNET]
+    volumes:
+      - /var/lib:/var/lib
+      - /dev/net/tun:/dev/net/tun
+    restart: unless-stopped
+
   traefik:
     image: "traefik:latest"
     container_name: traefik
@@ -760,8 +776,8 @@ services:
     hostname: jellyfin.local
     depends_on:
       - traefik
-    # ports:
-    #   - '8097:8096'
+    ports:
+      - '8097:8096'
     networks:
       - proxy
       - streaming
