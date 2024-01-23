@@ -453,9 +453,17 @@ services:
       - postgres
       - authentik-cache
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
-      - "traefik.http.routers.authentik.rule=Host(`oauth.${DOMAIN}`) || HostRegexp(`{subdomain:[a-z0-9]+}.${DOMAIN}`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      traefik.enable: "true"
+      traefik.http.routers.ak-outpost-authentik-router.rule: Host(`oauth.${DOMAIN}`)
+      # traefik.http.routers.ak-outpost-authentik-router.service: ak-outpost-authentik-service
+      traefik.http.routers.ak-outpost-authentik-router.tls: "true"
+      # traefik.http.services.ak-outpost-authentik-service.loadbalancer.healthcheck.path: "/outpost.goauthentik.io/ping"
+      # traefik.http.services.ak-outpost-authentik-service.loadbalancer.healthcheck.port: "9300"
+      traefik.http.services.ak-outpost-authentik-service.loadbalancer.server.port: "9000"
+      # - "traefik.enable=true"
+      # - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+      # - "traefik.http.routers.authentik.rule=Host(`oauth.${DOMAIN}`)"
+      #  || HostRegexp(`{subdomain:[a-z0-9]+}.${DOMAIN}`) && PathPrefix(`/outpost.goauthentik.io/`)"
 
   authentik-worker:
     image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
