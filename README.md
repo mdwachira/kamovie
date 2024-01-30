@@ -2,6 +2,15 @@
 This is my self-hosted repository for my media server
 
 The separated folder contains separate compose files depending on the services you with to deploy
+to install run the following script
+```
+  sudo dnf -y install git
+  cd ~
+  git clone https://github.com/mdwachira/kamovie.git compose
+  cd ./compose
+  sudo chmod +x install.sh
+  ./install.sh
+```
 
 
 ## ERPNext Setup
