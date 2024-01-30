@@ -1,10 +1,13 @@
 #!/bin/bash
 user=kamovie
-docker_dir=
-secrets_dir=
-backup_dir=
-media_dir=
-download_dir=
+remote_svr=10.10.10.8
+remote_media=/volume1/kamovie
+remote_backup=/volume1/docker/backup/kamovie
+docker_dir=/opt/docker
+secrets_dir=/home/$user/.secrets
+backup_dir=/mnt/backup
+media_dir=/mnt/media
+download_dir=/home/$user/downloads
 
 # Remove old fingerprint and add ssh key to device
 # ssh-keygen -R {IP_ADDRESS}
@@ -45,6 +48,7 @@ sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/dock
 sudo dnf update -y
 sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
+# Make directory structure
 mkdir -p $docker_dir/docker/{admin_stack,database_stack,download_stack,finance_stack,monitoring_stack,network_stack,streaming_stack}
 mkdir -p $download_dir/{complete,incomplete,torrents}
 # mkdir -p ~/download/complete/{ebooks,movies,series}
@@ -52,5 +56,12 @@ mkdir -p $media_dir/{ebooks,documentary,movies,series,reality,anime}
 mkdir -p $media_dir/documentary/{single,series}
 mkdir -p $backup_dir
 mkdir -p $secrets_dir
-cd /home/$user
-git clone
+
+# Install NFS
+sudo dnf -y install nfs-utils libnfsidmap sssd-nfs-idmap
+
+# Remote NFS mount
+sudo tee -a /etc/fstab<<EOF
+$remote_media:$remote_media $media_dir nfs defaults 0 0
+$remote_media:$remote_backup $backup_dir nfs defaults 0 0
+EOF
