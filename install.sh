@@ -38,24 +38,30 @@ sudo systemctl enable qemu-guest-agent.service --now
 touch .hushlogin
 
 # # Create user
-# useradd $user
-# passwd $user
-# usermod -aG sudo $user
+sudo useradd $user
+sudo passwd $user
+sudo usermod -aG sudo $user
 
 # Install Docker
 sudo dnf -y install dnf-plugins-core
 sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
 sudo dnf update -y
 sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $user
 
 # Make directory structure
-mkdir -p $docker_dir/docker/{admin_stack,database_stack,download_stack,finance_stack,monitoring_stack,network_stack,streaming_stack}
-mkdir -p $download_dir/{complete,incomplete,torrents}
+sudo mkdir -p $docker_dir/docker/{admin_stack,database_stack,download_stack,finance_stack,monitoring_stack,network_stack,streaming_stack}
+sudo chown -r $docker_dir $user:$user
+sudo mkdir -p $download_dir/{complete,incomplete,torrents}
+sudo chown -r $download_dir $user:$user
 # mkdir -p ~/download/complete/{ebooks,movies,series}
-mkdir -p $media_dir/{ebooks,documentary,movies,series,reality,anime}
-mkdir -p $media_dir/documentary/{single,series}
-mkdir -p $backup_dir
-mkdir -p $secrets_dir
+sudo mkdir -p $media_dir/{ebooks,documentary,movies,series,reality,anime}
+sudo mkdir -p $media_dir/documentary/{single,series}
+sudo chown -r $media_dir $user:$user
+sudo mkdir -p $backup_dir
+sudo chown -r $backup_dir $user:$user
+sudo mkdir -p $secrets_dir
+sudo chown -r $secrets_dir $user:$user
 
 # Install NFS
 sudo dnf -y install nfs-utils libnfsidmap sssd-nfs-idmap
