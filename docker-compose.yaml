@@ -359,39 +359,6 @@ services:
       - proxy
     depends_on:
       - crowdsec
-
-  # zitadel:
-  #   image: "ghcr.io/zitadel/zitadel:stable"
-  #   container_name: zitadel
-  #   restart: unless-stopped
-  #   networks:
-  #     - database
-  #     - proxy
-  #   # ZITADEL_MASTERKEY: 'Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju' # run tr -dc A-Za-z0-9 </dev/urandom | head -c 32
-  #   command: 'start-from-init --config /example-zitadel-config.yaml --config /example-zitadel-secrets.yaml --steps /example-zitadel-init-steps.yaml --masterkey "SAcD5TY0QPp89ip28bZPfEA5WDxqmobx" --tlsMode external'
-  #   depends_on:
-  #     - cockroach
-  #     - traefik
-  #   environment:
-  #     - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=mdwachira@gmail.com
-  #     - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=P@s5w04d
-  #     - ZITADEL_MASTERKEY=Wz4DeiIhkb4MHOoO9n0qUNI072rCaQju
-  #   # ports:
-  #   #   - "8080:8080"
-  #   volumes:
-  #     - ${DOCKER_DIR}/network_stack/zitadel/config.yaml:/example-zitadel-config.yaml:ro
-  #     - ${DOCKER_DIR}/network_stack/zitadel/secrets.yaml:/example-zitadel-secrets.yaml:ro
-  #     - ${DOCKER_DIR}/network_stack/zitadel/init-steps.yaml:/example-zitadel-init-steps.yaml:ro
-  #     - ${DOCKER_DIR}/network_stack/zitadel/cert:/crdb-certs:ro
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.zitadel.rule=Host(`zitadel.${DOMAIN}`)"
-  #     - "traefik.http.routers.zitadel.tls=true"
-  #     - "traefik.http.routers.zitadel.tls.certresolver=letsencrypt"
-  #     - "traefik.http.routers.zitadel.service=zitadel"
-  #     - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
-  #     - "traefik.http.services.zitadel.loadbalancer.passHostHeader=true"
-  #     - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
       
   # authelia:
   #   image: 'authelia/authelia'
@@ -561,43 +528,6 @@ services:
   #     - "traefik.enable=true"
   #     - "traefik.http.routers.pgadmin.rule=Host(`pg.${DOMAIN}`)"
   #     - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
-
-  # cockroach_cert:
-  #   image: "cockroachdb/cockroach:latest"
-  #   container_name: cockroach_cert
-  #   networks:
-  #     - "database"
-  #   entrypoint: ["/bin/bash", "-c"]
-  #   command:
-  #     [
-  #       "cp /certs/* /zitadel-certs/ && cockroach cert create-client --overwrite --certs-dir /zitadel-certs/ --ca-key /zitadel-certs/ca.key zitadel_user && chown 1000:1000 /zitadel-certs/*",
-  #     ]
-  #   volumes:
-  #     - ${DOCKER_DIR}/database_stack/cockroach/cert:/certs:ro
-  #     - ${DOCKER_DIR}/network_stack/zitadel/cert:/zitadel-certs:rw
-  #   depends_on:
-  #     cockroach:
-  #       condition: "service_healthy"
-
-  # cockroach:
-  #   restart: "always"
-  #   networks:
-  #     - "database"
-  #   image: "cockroachdb/cockroach:latest"
-  #   container_name: cockroach
-  #   command: "start-single-node --advertise-addr cockroach"
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
-  #     interval: "10s"
-  #     timeout: "30s"
-  #     retries: 5
-  #     start_period: "20s"
-  #   # ports:
-  #   #   - "9090:8080"
-  #   #   - "26257:26257"
-  #   volumes:
-  #     - ${DOCKER_DIR}/database_stack/cockroach/cert:/cockroach/certs:rw
-  #     - ${DOCKER_DIR}/database_stack/cockroach/data:/cockroach/cockroach-data:rw
 
   mariadb:
     image: mariadb:10.6
