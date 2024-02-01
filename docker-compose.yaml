@@ -532,6 +532,7 @@ services:
   mariadb:
     image: mariadb:10.6
     container_name: mariadb
+    hostname: mariadb
     healthcheck:
       test: mysqladmin ping -h localhost --password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
       interval: 1s
@@ -551,6 +552,26 @@ services:
       - MYSQL_ROOT_PASSWORD=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
     volumes:
       - ${DOCKER_DIR}/database_stack/mariadb/db:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: phpmyadmin
+    restart: always
+    networks:
+      - database
+      - proxy
+    depends_on:
+      - mariadb
+    # ports:
+    #   - 8080:80
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=mariadb
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin.rule=Host(`pma.${DOMAIN}`)"
+      - "traefik.http.routers.phpmyadmin.tls.certresolver=letsencrypt"
+      - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
 
 #####################################################
 #                Monitoring Stack                   #              
@@ -970,7 +991,7 @@ services:
 #####################################################
 #                 Finance Stack                     #              
 #####################################################
-  
+ 
   erpnext-backend:
     image: frappe/erpnext:${ERPNEXT_VERSION}
     container_name: erpnext-backend
@@ -1053,9 +1074,9 @@ services:
         bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H --install-app erpnext --set-default demo.enext.duckdns.org;
         bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H --install-app erpnext slewa.enext.duckdns.org;
 
-  erpnext-site-1:
+  erpnext:
     image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-site-demo
+    container_name: erpnext-frontend
     deploy:
       restart_policy:
         condition: on-failure
@@ -1069,7 +1090,7 @@ services:
       - nginx-entrypoint.sh
     environment:
       - BACKEND=erpnext-backend:8000
-      - FRAPPE_SITE_NAME_HEADER=demo.enext.duckdns.org
+      - FRAPPE_SITE_NAME_HEADER=$$host
       - SOCKETIO=erpnext-websocket:9000
       - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
       - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
@@ -1083,43 +1104,9 @@ services:
     #   - "8080:8080"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.erpnext-site-1.rule=Host(`demo.enext.duckdns.org`)"
-      - "traefik.http.routers.erpnext-site-1.tls.certresolver=letsencrypt"
-      - "traefik.http.services.erpnext-site-1.loadbalancer.server.port=8080"
-
-  erpnext-site-2:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-site-slewa
-    deploy:
-      restart_policy:
-        condition: on-failure
-    depends_on:
-      - traefik
-      - erpnext-backend
-    networks:
-      - finance
-      - proxy
-    command:
-      - nginx-entrypoint.sh
-    environment:
-      - BACKEND=erpnext-backend:8000
-      - FRAPPE_SITE_NAME_HEADER=slewa.enext.duckdns.org
-      - SOCKETIO=erpnext-websocket:9000
-      - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
-      - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
-      - UPSTREAM_REAL_IP_RECURSIVE=off
-      - PROXY_READ_TIMEOUT=120
-      - CLIENT_MAX_BODY_SIZE=50m
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-    # ports:
-    #   - "18095:8080"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.erpnext-site-2.rule=Host(`slewa.enext.duckdns.org`)"
-      - "traefik.http.routers.erpnext-site-2.tls.certresolver=letsencrypt"
-      - "traefik.http.services.erpnext-site-2.loadbalancer.server.port=8080"
+      - "traefik.http.routers.erpnext.rule=Host(`demo.enext.duckdns.org`,`slewa.enext.duckdns.org`)"
+      - "traefik.http.routers.erpnext.tls.certresolver=letsencrypt"
+      - "traefik.http.services.erpnext.loadbalancer.server.port=8080"
 
   erpnext-queue-long:
     image: frappe/erpnext:${ERPNEXT_VERSION}
