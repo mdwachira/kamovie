@@ -394,113 +394,113 @@ services:
   #     - traefik
   #     - postgres
 
-  authentik:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
-    container_name: authentik
-    restart: unless-stopped
-    command: server
-    environment:
-      - AUTHENTIK_REDIS__HOST=authentik-cache
-      - AUTHENTIK_POSTGRESQL__HOST=postgres
-      - AUTHENTIK_POSTGRESQL__USER=authentik
-      - AUTHENTIK_POSTGRESQL__NAME=authentik
-      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PG_PASS}
-    volumes:
-      - ${DOCKER_DIR}/network_stack/authentik/media:/media
-      - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
-    env_file:
-      - .env
-    networks:
-      - database
-      - proxy
-    ports:
-      - "${COMPOSE_PORT_HTTP:-9000}:9000"
-      - "${COMPOSE_PORT_HTTPS:-9443}:9443"
-    depends_on:
-      - postgres
-      - authentik-cache
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.ak-outpost-authentik-router.rule=Host(`oauth.${DOMAIN}`)"
-      - "traefik.http.routers.ak-outpost-authentik-router.tls=true"
-      - "traefik.http.routers.ak-outpost-authentik-router.tls.certresolver=letsencrypt"
-      - "traefik.http.services.ak-outpost-authentik-service.loadbalancer.server.port=9000"
+  # authentik:
+  #   image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
+  #   container_name: authentik
+  #   restart: unless-stopped
+  #   command: server
+  #   environment:
+  #     - AUTHENTIK_REDIS__HOST=authentik-cache
+  #     - AUTHENTIK_POSTGRESQL__HOST=postgres
+  #     - AUTHENTIK_POSTGRESQL__USER=authentik
+  #     - AUTHENTIK_POSTGRESQL__NAME=authentik
+  #     - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PG_PASS}
+  #   volumes:
+  #     - ${DOCKER_DIR}/network_stack/authentik/media:/media
+  #     - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - database
+  #     - proxy
+  #   ports:
+  #     - "${COMPOSE_PORT_HTTP:-9000}:9000"
+  #     - "${COMPOSE_PORT_HTTPS:-9443}:9443"
+  #   depends_on:
+  #     - postgres
+  #     - authentik-cache
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.ak-outpost-authentik-router.rule=Host(`oauth.${DOMAIN}`)"
+  #     - "traefik.http.routers.ak-outpost-authentik-router.tls=true"
+  #     - "traefik.http.routers.ak-outpost-authentik-router.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.ak-outpost-authentik-service.loadbalancer.server.port=9000"
 
-  authentik-worker:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
-    container_name: authentik-worker
-    restart: unless-stopped
-    command: worker
-    environment:
-      - AUTHENTIK_REDIS__HOST=authentik-cache
-      - AUTHENTIK_POSTGRESQL__HOST=postgres
-      - AUTHENTIK_POSTGRESQL__USER=authentik
-      - AUTHENTIK_POSTGRESQL__NAME=authentik
-      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PG_PASS}
-    # `user: root` and the docker socket volume are optional.
-    # See more for the docker socket integration here:
-    # https://goauthentik.io/docs/outposts/integrations/docker
-    # Removing `user: root` also prevents the worker from fixing the permissions
-    # on the mounted folders, so when removing this make sure the folders have the correct UID/GID
-    # (1000:1000 by default)
-    # user: root
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${DOCKER_DIR}/network_stack/authentik/media:/media
-      - ${DOCKER_DIR}/network_stack/authentik/certs:/certs
-      - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
-    env_file:
-      - .env
-    networks:
-      - database
-      - proxy
-    depends_on:
-      - postgres
-      - authentik-cache
+  # authentik-worker:
+  #   image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
+  #   container_name: authentik-worker
+  #   restart: unless-stopped
+  #   command: worker
+  #   environment:
+  #     - AUTHENTIK_REDIS__HOST=authentik-cache
+  #     - AUTHENTIK_POSTGRESQL__HOST=postgres
+  #     - AUTHENTIK_POSTGRESQL__USER=authentik
+  #     - AUTHENTIK_POSTGRESQL__NAME=authentik
+  #     - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_PG_PASS}
+  #   # `user: root` and the docker socket volume are optional.
+  #   # See more for the docker socket integration here:
+  #   # https://goauthentik.io/docs/outposts/integrations/docker
+  #   # Removing `user: root` also prevents the worker from fixing the permissions
+  #   # on the mounted folders, so when removing this make sure the folders have the correct UID/GID
+  #   # (1000:1000 by default)
+  #   # user: root
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ${DOCKER_DIR}/network_stack/authentik/media:/media
+  #     - ${DOCKER_DIR}/network_stack/authentik/certs:/certs
+  #     - ${DOCKER_DIR}/network_stack/authentik/custom-templates:/templates
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - database
+  #     - proxy
+  #   depends_on:
+  #     - postgres
+  #     - authentik-cache
   
-  authentik-cache:
-    image: docker.io/library/redis:alpine
-    container_name: authentik-cache
-    command: --save 60 1 --loglevel warning
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-      start_period: 20s
-      interval: 30s
-      retries: 5
-      timeout: 3s
-    networks:
-      # - database
-      - proxy
-    volumes:
-      - authentik-cache:/data
+  # authentik-cache:
+  #   image: docker.io/library/redis:alpine
+  #   container_name: authentik-cache
+  #   command: --save 60 1 --loglevel warning
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+  #     start_period: 20s
+  #     interval: 30s
+  #     retries: 5
+  #     timeout: 3s
+  #   networks:
+  #     # - database
+  #     - proxy
+  #   volumes:
+  #     - authentik-cache:/data
 
 #####################################################
 #                   Database Stack                  #              
 #####################################################
 
-  postgres:
-    image: postgres:12
-    container_name: postgres
-    # hostname: postgres
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d $${PG_DB} -U $${USER}"]
-      start_period: 20s
-      interval: 30s
-      retries: 5
-      timeout: 5s
-    volumes:
-      - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
-    networks:
-      - database
-      # - proxy
-    # ports:
-    #   - "8093:80"
-    environment:
-      - POSTGRES_PASSWORD=${PG_PASS:?database password required}
-      - POSTGRES_USER=${USER}
-      - POSTGRES_DB=${PG_DB:-authentik}
+  # postgres:
+  #   image: postgres:12
+  #   container_name: postgres
+  #   # hostname: postgres
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -d $${PG_DB} -U $${USER}"]
+  #     start_period: 20s
+  #     interval: 30s
+  #     retries: 5
+  #     timeout: 5s
+  #   volumes:
+  #     - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
+  #   networks:
+  #     - database
+  #     # - proxy
+  #   # ports:
+  #   #   - "8093:80"
+  #   environment:
+  #     - POSTGRES_PASSWORD=${PG_PASS:?database password required}
+  #     - POSTGRES_USER=${USER}
+  #     - POSTGRES_DB=${PG_DB:-authentik}
 
   # postgres_admin:
   #   image: 'dpage/pgadmin4:latest'
@@ -529,49 +529,49 @@ services:
   #     - "traefik.http.routers.pgadmin.rule=Host(`pg.${DOMAIN}`)"
   #     - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
 
-  mariadb:
-    image: mariadb:10.6
-    container_name: mariadb
-    hostname: mariadb
-    healthcheck:
-      test: mysqladmin ping -h localhost --password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
-      interval: 1s
-      retries: 15
-    deploy:
-      restart_policy:
-        condition: on-failure
-    networks:
-      - database
-      - finance
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --skip-character-set-client-handshake
-      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
-    environment:
-      - MYSQL_ROOT_PASSWORD=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
-    volumes:
-      - ${DOCKER_DIR}/database_stack/mariadb/db:/var/lib/mysql
+  # mariadb:
+  #   image: mariadb:10.6
+  #   container_name: mariadb
+  #   hostname: mariadb
+  #   healthcheck:
+  #     test: mysqladmin ping -h localhost --password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
+  #     interval: 1s
+  #     retries: 15
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks:
+  #     - database
+  #     - finance
+  #   command:
+  #     - --character-set-server=utf8mb4
+  #     - --collation-server=utf8mb4_unicode_ci
+  #     - --skip-character-set-client-handshake
+  #     - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
+  #   environment:
+  #     - MYSQL_ROOT_PASSWORD=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H
+  #   volumes:
+  #     - ${DOCKER_DIR}/database_stack/mariadb/db:/var/lib/mysql
 
-  phpmyadmin:
-    image: phpmyadmin
-    container_name: phpmyadmin
-    restart: always
-    networks:
-      - database
-      - proxy
-    depends_on:
-      - mariadb
-    # ports:
-    #   - 8080:80
-    environment:
-      - PMA_ARBITRARY=1
-      - PMA_HOST=mariadb
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.phpmyadmin.rule=Host(`pma.${DOMAIN}`)"
-      - "traefik.http.routers.phpmyadmin.tls.certresolver=letsencrypt"
-      - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
+  # phpmyadmin:
+  #   image: phpmyadmin
+  #   container_name: phpmyadmin
+  #   restart: always
+  #   networks:
+  #     - database
+  #     - proxy
+  #   depends_on:
+  #     - mariadb
+  #   # ports:
+  #   #   - 8080:80
+  #   environment:
+  #     - PMA_ARBITRARY=1
+  #     - PMA_HOST=mariadb
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.phpmyadmin.rule=Host(`pma.${DOMAIN}`)"
+  #     - "traefik.http.routers.phpmyadmin.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
 
 #####################################################
 #                Monitoring Stack                   #              
@@ -992,21 +992,21 @@ services:
 #                 Finance Stack                     #              
 #####################################################
  
-  erpnext-backend:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-backend
-    deploy:
-      restart_policy:
-        condition: on-failure
-    depends_on:
-      - mariadb
-      - erpnext-redis-cache
-      - erpnext-redis-queue
-    networks:
-      - finance
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+  # erpnext-backend:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   container_name: erpnext-backend
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   depends_on:
+  #     - mariadb
+  #     - erpnext-redis-cache
+  #     - erpnext-redis-queue
+  #   networks:
+  #     - finance
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
   # erpnext-configurator:
   #   image: frappe/erpnext:${ERPNEXT_VERSION}
@@ -1074,125 +1074,125 @@ services:
   #       bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H --install-app erpnext --set-default demo.enext.duckdns.org;
   #       bench new-site --no-mariadb-socket --admin-password=admin --db-root-password=ByDzGAfhcU7hOK6YgIVfpDXWph8Kf53H --install-app erpnext slewa.enext.duckdns.org;
 
-  erpnext:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-frontend
-    deploy:
-      restart_policy:
-        condition: on-failure
-    depends_on:
-      - traefik
-      - erpnext-backend
-    networks:
-      - finance
-      - proxy
-    command:
-      - nginx-entrypoint.sh
-    environment:
-      - BACKEND=erpnext-backend:8000
-      - FRAPPE_SITE_NAME_HEADER=$$host
-      - SOCKETIO=erpnext-websocket:9000
-      - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
-      - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
-      - UPSTREAM_REAL_IP_RECURSIVE=off
-      - PROXY_READ_TIMEOUT=120
-      - CLIENT_MAX_BODY_SIZE=50m
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-    # ports:
-    #   - "8080:8080"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.erpnext.rule=Host(`demo.enext.duckdns.org`,`slewa.enext.duckdns.org`)"
-      - "traefik.http.routers.erpnext.tls.certresolver=letsencrypt"
-      - "traefik.http.services.erpnext.loadbalancer.server.port=8080"
+  # erpnext:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   container_name: erpnext-frontend
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   depends_on:
+  #     - traefik
+  #     - erpnext-backend
+  #   networks:
+  #     - finance
+  #     - proxy
+  #   command:
+  #     - nginx-entrypoint.sh
+  #   environment:
+  #     - BACKEND=erpnext-backend:8000
+  #     - FRAPPE_SITE_NAME_HEADER=$$host
+  #     - SOCKETIO=erpnext-websocket:9000
+  #     - UPSTREAM_REAL_IP_ADDRESS=127.0.0.1
+  #     - UPSTREAM_REAL_IP_HEADER=X-Forwarded-For
+  #     - UPSTREAM_REAL_IP_RECURSIVE=off
+  #     - PROXY_READ_TIMEOUT=120
+  #     - CLIENT_MAX_BODY_SIZE=50m
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+  #   # ports:
+  #   #   - "8080:8080"
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.erpnext.rule=Host(`demo.enext.duckdns.org`,`slewa.enext.duckdns.org`)"
+  #     - "traefik.http.routers.erpnext.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.erpnext.loadbalancer.server.port=8080"
 
-  erpnext-queue-long:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-queue-long
-    deploy:
-      restart_policy:
-        condition: on-failure
-    networks:
-      - finance
-    command:
-      - bench
-      - worker
-      - --queue
-      - long,default,short
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+  # erpnext-queue-long:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   container_name: erpnext-queue-long
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks:
+  #     - finance
+  #   command:
+  #     - bench
+  #     - worker
+  #     - --queue
+  #     - long,default,short
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  erpnext-queue-short:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-queue-short
-    deploy:
-      restart_policy:
-        condition: on-failure
-    networks:
-      - finance
-    command:
-      - bench
-      - worker
-      - --queue
-      - short,default
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+  # erpnext-queue-short:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   container_name: erpnext-queue-short
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks:
+  #     - finance
+  #   command:
+  #     - bench
+  #     - worker
+  #     - --queue
+  #     - short,default
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  erpnext-redis-queue:
-    image: redis:6.2-alpine
-    container_name: erpnext-redis-queue
-    deploy:
-      restart_policy:
-        condition: on-failure
-    networks:
-      - finance
-    volumes:
-      - erpnext-queue:/data
+  # erpnext-redis-queue:
+  #   image: redis:6.2-alpine
+  #   container_name: erpnext-redis-queue
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks:
+  #     - finance
+  #   volumes:
+  #     - erpnext-queue:/data
 
-  erpnext-redis-cache:
-    image: redis:6.2-alpine
-    container_name: erpnext-redis-cache
-    deploy:
-      restart_policy:
-        condition: on-failure
-    networks:
-      - finance
-    volumes:
-      - erpnext-cache:/data
+  # erpnext-redis-cache:
+  #   image: redis:6.2-alpine
+  #   container_name: erpnext-redis-cache
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks:
+  #     - finance
+  #   volumes:
+  #     - erpnext-cache:/data
 
-  erpnext-scheduler:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-scheduler
-    deploy:
-      restart_policy:
-        condition: on-failure
-    networks:
-      - finance
-    command:
-      - bench
-      - schedule
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+  # erpnext-scheduler:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   container_name: erpnext-scheduler
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks:
+  #     - finance
+  #   command:
+  #     - bench
+  #     - schedule
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
-  erpnext-websocket:
-    image: frappe/erpnext:${ERPNEXT_VERSION}
-    container_name: erpnext-websocket
-    deploy:
-      restart_policy:
-        condition: on-failure
-    networks:
-      - finance
-    command:
-      - node
-      - /home/frappe/frappe-bench/apps/frappe/socketio.js
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-      - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
+  # erpnext-websocket:
+  #   image: frappe/erpnext:${ERPNEXT_VERSION}
+  #   container_name: erpnext-websocket
+  #   deploy:
+  #     restart_policy:
+  #       condition: on-failure
+  #   networks:
+  #     - finance
+  #   command:
+  #     - node
+  #     - /home/frappe/frappe-bench/apps/frappe/socketio.js
+  #   volumes:
+  #     - sites:/home/frappe/frappe-bench/sites
+  #     - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
 
 #####################################################
 #                   Backup Stack                    #              
@@ -1291,3 +1291,27 @@ services:
       - "traefik.http.routers.kopia.rule=Host(`bck.kamovie.duckdns.org`)"
       - "traefik.http.routers.kopia.tls.certresolver=letsencrypt"
       - "traefik.http.services.kopia.loadbalancer.server.port=51515"
+
+  rclone:
+    image: rclone/rclone:latest
+    container_name: rclone
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    command: rcd --rc-web-gui --rc-addr 0.0.0.0:5572 --rc-web-fetch-url=https://api.github.com/repos/rclone/rclone-webui-react/releases/latest --rc-web-gui-update --rc-user user --rc-pass rclone -vv --checksum --transfers=4 --checkers=4 --contimeout=60s --timeout=300s --retries=3 --low-level-retries=10 --stats=1s --stats-file-name-length=0
+    #ports:
+    #  - "5572:5572" add this port if you're not using a proxy
+    volumes: #be sure to amend the below to your user and directories
+      - ${DOCKER_DIR}/backup_stack/rclone/config:/config/rclone #location of your rclone config file (i.e., where the remote and secrets are stored)
+      - ${DOCKER_DIR}/backup_stack/rclone/dashboard:/sync_script #script to allow remote execution of backups (e.g., rclone copy --checksum --verbose --transfers 1 --checkers 4 --contimeout 60s --timeout 300s --retries 3 --low-level-retries 10 --stats 1s /YOUR_FOLDER YOUR_REMOTE:REMOTE_FOLDER/sync_script)
+      - ${BACKUP_DIR}:/data #this is my truenas SMB share - change to wherever you store the data you wish to upload
+    environment:
+      - PHP_TZ=${TIMEZONE}
+    networks:
+      proxy: #remove the proxy network if you're not using traefik
+    labels: #remove the labels section if you're not using traefik
+      - "traefik.enable=true"
+      - "traefik.http.routers.rclone.rule=Host(`cln.kamovie.duckdns.org`)"
+      - "traefik.http.routers.rclone.tls.certresolver=letsencrypt"
+      - "traefik.http.services.rclone.loadbalancer.server.port=5572"
+
