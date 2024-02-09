@@ -441,7 +441,7 @@ services:
       - database
       - proxy
     ports:
-      - "${COMPOSE_PORT_HTTP:-9000}:9000"
+      # - "${COMPOSE_PORT_HTTP:-9000}:9000"
       - "${COMPOSE_PORT_HTTPS:-9443}:9443"
     depends_on:
       - postgres
@@ -511,16 +511,18 @@ services:
     image: postgres:14
     container_name: postgres
     hostname: postgres
+    restart: unless-stopped
+    user: ${ENV_PUID}:${ENV_PGID}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d $${PG_DB} -U $${USER}"]
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
       start_period: 20s
       interval: 30s
       retries: 5
       timeout: 5s
     networks:
       - database
-    ports:
-      - 5432:5432
+    # ports:
+    #   - 5432:5432
     volumes:
       - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
     environment:
@@ -664,7 +666,7 @@ services:
       - WATCHTOWER_INCLUDE_STOPPED=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_SCHEDULE=0 3 * * 0
+      - WATCHTOWER_SCHEDULE=0 3 * * 0,3
       - WATCHTOWER_NOTIFICATIONS_LEVEL=debug
       - WATCHTOWER_ROLLING_RESTART=true
       - WATCHTOWER_DISABLE_CONTAINERS=postgres,mariadb
@@ -834,7 +836,7 @@ services:
     hostname: calibre.local
     ports:
       - '8095:8080'
-      - '8094:8081'
+      # - '8094:8081'
     networks:
       - streaming
       - proxy
@@ -926,25 +928,26 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.sonarr.rule=Host(`${SUB_DOMAIN_SONARR}.${DOMAIN}`)"
       - "traefik.http.routers.sonarr.tls.certresolver=letsencrypt"
+      # - "traefik.http.routers.sonarr.middlewares=forwardauth-authentik@file"
       - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
     restart: unless-stopped
 
-  jackett:
-    image: "lscr.io/linuxserver/jackett"
-    container_name: jackett
-    hostname: jackett.local
-    networks:
-      - download
-    environment:
-      - PUID=${ENV_PUID}
-      - PGID=${ENV_PGID}
-      - TZ=${TIMEZONE}
-    volumes:
-      - ${DOCKER_DIR}/download_stack/jackett:/config
-      - ${DOWNLOAD_DIR}:/downloads
-    ports:
-      - '8083:9117'
-    restart: unless-stopped
+  # jackett:
+  #   image: "lscr.io/linuxserver/jackett"
+  #   container_name: jackett
+  #   hostname: jackett.local
+  #   networks:
+  #     - download
+  #   environment:
+  #     - PUID=${ENV_PUID}
+  #     - PGID=${ENV_PGID}
+  #     - TZ=${TIMEZONE}
+  #   volumes:
+  #     - ${DOCKER_DIR}/download_stack/jackett:/config
+  #     - ${DOWNLOAD_DIR}:/downloads
+  #   ports:
+  #     - '8083:9117'
+  #   restart: unless-stopped
 
   bazarr:
     image: "lscr.io/linuxserver/bazarr"
@@ -1309,8 +1312,8 @@ services:
     restart: unless-stopped
     networks:
       - proxy
-    ports:
-        - 51515:51515
+    # ports:
+    #     - 51515:51515
     # Setup the server that provides the web gui
     command:
         - server
@@ -1337,7 +1340,7 @@ services:
         - /tmp:/tmp:shared
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.kopia.rule=Host(`bck.kamovie.duckdns.org`)"
+      - "traefik.http.routers.kopia.rule=Host(`bck.${DOMAIN}`)"
       - "traefik.http.routers.kopia.tls.certresolver=letsencrypt"
       - "traefik.http.services.kopia.loadbalancer.server.port=51515"
 
@@ -1360,7 +1363,7 @@ services:
       proxy: #remove the proxy network if you're not using traefik
     labels: #remove the labels section if you're not using traefik
       - "traefik.enable=true"
-      - "traefik.http.routers.rclone.rule=Host(`cln.kamovie.duckdns.org`)"
+      - "traefik.http.routers.rclone.rule=Host(`cln.${DOMAIN}`)"
       - "traefik.http.routers.rclone.tls.certresolver=letsencrypt"
       - "traefik.http.services.rclone.loadbalancer.server.port=5572"
 
