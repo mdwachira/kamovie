@@ -18,6 +18,9 @@ volumes:
   authentik-cache:
 
 networks:
+  admin:
+    driver: bridge
+    name: administration_network
   streaming:
     driver: bridge
     name: media_network
@@ -60,27 +63,6 @@ services:
      - "traefik.http.routers.portainer.rule=Host(`dock.${DOMAIN}`)"
      - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
-
-  # dockge:
-  #   image: "louislam/dockge:latest"
-  #   container_name: dockge
-  #   hostname: dockge.local
-  #   restart: unless-stopped
-  #   networks:
-  #     - proxy
-  #   # ports:
-  #   #   - '5001:5001'
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #     - ${DOCKER_DIR}/admin_stack/dockge/data:/app/data
-  #     - ${DOCKER_DIR}:/home/mdwachira/docker
-  #   environment:
-  #     - DOCKGE_STACKS_DIR=/home/mdwachira/docker
-  #   labels:
-  #     - "traefik.enable=true"
-  #     - "traefik.http.routers.dockge.rule=Host(`dge.${DOMAIN}`)"
-  #     - "traefik.http.routers.dockge.tls.certresolver=letsencrypt"
-  #     - "traefik.http.services.dockge.loadbalancer.server.port=5001"
 
   homarr:
     image: "ghcr.io/ajnart/homarr"
@@ -359,7 +341,7 @@ services:
       # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
 
   crowdsec:
-    image: crowdsecurity/crowdsec
+    image: crowdsecurity/crowdsec:slim
     container_name: crowdsec
     environment:
       - 'GID=${ENV_PGID}'
@@ -386,40 +368,6 @@ services:
       - proxy
     depends_on:
       - crowdsec
-      
-  # authelia:
-  #   image: 'authelia/authelia'
-  #   container_name: authelia
-  #   restart: unless-stopped
-  #   environment:
-  #     - PUID=${ENV_PUID}
-  #     - PGID=${ENV_PGID}
-  #     - TZ=${TIMEZONE}
-  #     - AUTHELIA_JWT_SECRET_FILE=/secrets/JWT_SECRET
-  #     - AUTHELIA_SESSION_SECRET_FILE=/secrets/SESSION_SECRET
-  #     - AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE=/secrets/STORAGE_PASSWORD
-  #     - AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/secrets/STORAGE_ENCRYPTION_KEY
-  #   volumes:
-  #     - ${DOCKER_DIR}/network_stack/authelia/config:/config
-  #     - ./.secrets:/secrets
-  #   labels:
-  #     - 'traefik.enable=true'
-  #     - 'traefik.http.routers.authelia.rule=Host(`oauth.${DOMAIN}`)'
-  #     # - 'traefik.http.routers.authelia.entrypoints=websecure'
-  #     # - 'traefik.http.routers.authelia.tls=true'
-  #     - 'traefik.http.routers.authelia.tls.certresolver=letsencrypt'
-  #     - 'traefik.http.services.authelia.loadbalancer.server.port=9091'
-  #     - 'traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/verify?rd=https://oauth.${DOMAIN}'
-  #     - 'traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true'
-  #     - 'traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email'
-  #   networks:
-  #     - proxy
-  #     - database
-  #   expose:
-  #     - 9091
-  #   depends_on:
-  #     - traefik
-  #     - postgres
 
   authentik:
     image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2023.10.6}
@@ -506,7 +454,6 @@ services:
 #                   Database Stack                  #              
 #####################################################
 
-
   postgres:
     image: postgres:14
     container_name: postgres
@@ -529,29 +476,6 @@ services:
       - POSTGRES_PASSWORD=${PG_PASS}
       - POSTGRES_USER=${USER}
       - POSTGRES_DB=${PG_DB:-authentik}
-
-  # postgres:
-  #   image: postgres:12
-  #   container_name: postgres
-  #   # hostname: postgres
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -d $${PG_DB} -U $${USER}"]
-  #     start_period: 20s
-  #     interval: 30s
-  #     retries: 5
-  #     timeout: 5s
-  #   volumes:
-  #     - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
-  #   networks:
-  #     - database
-  #     # - proxy
-  #   # ports:
-  #   #   - "8093:80"
-  #   environment:
-  #     - POSTGRES_PASSWORD=${PG_PASS:?database password required}
-  #     - POSTGRES_USER=${USER}
-  #     - POSTGRES_DB=${PG_DB:-authentik}
 
   postgres_admin:
     image: 'dpage/pgadmin4:latest'
@@ -653,23 +577,26 @@ services:
     restart: unless-stopped
     container_name: watchtower
     hostname: kamovie_remote
-    network_mode: host
+    # network_mode: host
+    networks:
+      - admin
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/localtime:/etc/localtime:ro
     environment:
       - WATCHTOWER_NOTIFICATIONS=slack
-      - WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL=https://hooks.slack.com/services/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
+      - WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL=${SLACK}
       - WATCHTOWER_NOTIFICATION_SLACK_IDENTIFIER=kamovie_remote
       - WATCHTOWER_NOTIFICATION_SLACK_CHANNEL=#development_updates
       - WATCHTOWER_REVIVE_STOPPED=true
       - WATCHTOWER_INCLUDE_STOPPED=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_SCHEDULE=0 3 * * 0,3
+      - WATCHTOWER_SCHEDULE=0 6,17 * * *
       - WATCHTOWER_NOTIFICATIONS_LEVEL=debug
       - WATCHTOWER_ROLLING_RESTART=true
-      - WATCHTOWER_DISABLE_CONTAINERS=postgres,mariadb
+      - WATCHTOWER_DISABLE_CONTAINERS=postgres,mariadb,crater-cron,crater
+      # - WATCHTOWER_NO_STARTUP_MESSAGE=true
 
   uptime_kuma:
     image: "docker.io/louislam/uptime-kuma"
@@ -888,7 +815,7 @@ services:
       - proxy
       - download
     ports:
-      - '8081:7878'
+      - '18081:7878'
     environment:
       - PUID=${ENV_PUID}
       - PGID=${ENV_PGID}
@@ -931,23 +858,6 @@ services:
       # - "traefik.http.routers.sonarr.middlewares=forwardauth-authentik@file"
       - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
     restart: unless-stopped
-
-  # jackett:
-  #   image: "lscr.io/linuxserver/jackett"
-  #   container_name: jackett
-  #   hostname: jackett.local
-  #   networks:
-  #     - download
-  #   environment:
-  #     - PUID=${ENV_PUID}
-  #     - PGID=${ENV_PGID}
-  #     - TZ=${TIMEZONE}
-  #   volumes:
-  #     - ${DOCKER_DIR}/download_stack/jackett:/config
-  #     - ${DOWNLOAD_DIR}:/downloads
-  #   ports:
-  #     - '8083:9117'
-  #   restart: unless-stopped
 
   bazarr:
     image: "lscr.io/linuxserver/bazarr"
@@ -1028,7 +938,7 @@ services:
     volumes:
       - ${DOCKER_DIR}/download_stack/searcharr/data:/app/data
       - ${DOCKER_DIR}/download_stack/searcharr/logs:/app/logs
-      - ${DOCKER_DIR}/download_stack/searcharr/settings.py:/app/settings.py
+      - ${DOCKER_DIR}/download_stack/searcharr/settings.py:/app/settings.py:ro
     environment:
       - PUID=${ENV_PUID}
       - PGID=${ENV_PGID}
@@ -1041,7 +951,227 @@ services:
     network_mode: host
 
 #####################################################
-#                 Finance Stack                     #              
+#                   Backup Stack                    #              
+#####################################################
+
+  kopia:
+    image: kopia/kopia:latest
+    hostname: kopia
+    container_name: kopia
+    restart: unless-stopped
+    networks:
+      - proxy
+    # ports:
+    #     - 51515:51515
+    # Setup the server that provides the web gui
+    command:
+        - server
+        - start
+        - --disable-csrf-token-checks
+        - --insecure
+        - --address=0.0.0.0:51515
+        - --server-username=mdwachira
+        - --server-password=P@s5w04d
+    environment:
+        # Set repository password
+        KOPIA_PASSWORD: "P@s5w04d"
+        USER: "mdwachira"
+    volumes:
+        # Mount local folders needed by kopia
+        - ${DOCKER_DIR}/backup_stack/kopia/config:/app/config
+        - ${DOCKER_DIR}/backup_stack/kopia/cache:/app/cache
+        - ${DOCKER_DIR}/backup_stack/kopia/logs:/app/logs
+        # Mount local folders to snapshot
+        - ${DOCKER_DIR}:/data:ro
+        # Mount repository location
+        - ${BACKUP_DIR}:/repository
+        # Mount path for browsing mounted snaphots
+        - /tmp:/tmp:shared
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kopia.rule=Host(`bck.${DOMAIN}`)"
+      - "traefik.http.routers.kopia.tls.certresolver=letsencrypt"
+      - "traefik.http.services.kopia.loadbalancer.server.port=51515"
+
+  rclone:
+    image: rclone/rclone:latest
+    container_name: rclone
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    command: rcd --rc-web-gui --rc-addr 0.0.0.0:5572 --rc-web-fetch-url=https://api.github.com/repos/rclone/rclone-webui-react/releases/latest --rc-web-gui-update --rc-user mdwachira --rc-pass x25dhPqai6Ha3msz -vv --checksum --transfers=4 --checkers=4 --contimeout=60s --timeout=300s --retries=3 --low-level-retries=10 --stats=1s --stats-file-name-length=0
+    #ports:
+    #  - "5572:5572" add this port if you're not using a proxy
+    volumes: #be sure to amend the below to your user and directories
+      - ${DOCKER_DIR}/backup_stack/rclone/config:/config/rclone #location of your rclone config file (i.e., where the remote and secrets are stored)
+      - ${DOCKER_DIR}/backup_stack/rclone/dashboard:/sync_script #script to allow remote execution of backups (e.g., rclone copy --checksum --verbose --transfers 1 --checkers 4 --contimeout 60s --timeout 300s --retries 3 --low-level-retries 10 --stats 1s /YOUR_FOLDER YOUR_REMOTE:REMOTE_FOLDER/sync_script)
+      - ${BACKUP_DIR}:/data #this is my truenas SMB share - change to wherever you store the data you wish to upload
+    environment:
+      - PHP_TZ=${TIMEZONE}
+    networks:
+      proxy: #remove the proxy network if you're not using traefik
+    labels: #remove the labels section if you're not using traefik
+      - "traefik.enable=true"
+      - "traefik.http.routers.rclone.rule=Host(`cln.${DOMAIN}`)"
+      - "traefik.http.routers.rclone.tls.certresolver=letsencrypt"
+      - "traefik.http.services.rclone.loadbalancer.server.port=5572"
+
+#####################################################
+#                   Archive                         #              
+#####################################################
+      
+  # authelia:
+  #   image: 'authelia/authelia'
+  #   container_name: authelia
+  #   restart: unless-stopped
+  #   environment:
+  #     - PUID=${ENV_PUID}
+  #     - PGID=${ENV_PGID}
+  #     - TZ=${TIMEZONE}
+  #     - AUTHELIA_JWT_SECRET_FILE=/secrets/JWT_SECRET
+  #     - AUTHELIA_SESSION_SECRET_FILE=/secrets/SESSION_SECRET
+  #     - AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE=/secrets/STORAGE_PASSWORD
+  #     - AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/secrets/STORAGE_ENCRYPTION_KEY
+  #   volumes:
+  #     - ${DOCKER_DIR}/network_stack/authelia/config:/config
+  #     - ./.secrets:/secrets
+  #   labels:
+  #     - 'traefik.enable=true'
+  #     - 'traefik.http.routers.authelia.rule=Host(`oauth.${DOMAIN}`)'
+  #     # - 'traefik.http.routers.authelia.entrypoints=websecure'
+  #     # - 'traefik.http.routers.authelia.tls=true'
+  #     - 'traefik.http.routers.authelia.tls.certresolver=letsencrypt'
+  #     - 'traefik.http.services.authelia.loadbalancer.server.port=9091'
+  #     - 'traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/verify?rd=https://oauth.${DOMAIN}'
+  #     - 'traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true'
+  #     - 'traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email'
+  #   networks:
+  #     - proxy
+  #     - database
+  #   expose:
+  #     - 9091
+  #   depends_on:
+  #     - traefik
+  #     - postgres
+
+  # dockge:
+  #   image: "louislam/dockge:latest"
+  #   container_name: dockge
+  #   hostname: dockge.local
+  #   restart: unless-stopped
+  #   networks:
+  #     - proxy
+  #   # ports:
+  #   #   - '5001:5001'
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ${DOCKER_DIR}/admin_stack/dockge/data:/app/data
+  #     - ${DOCKER_DIR}:/home/mdwachira/docker
+  #   environment:
+  #     - DOCKGE_STACKS_DIR=/home/mdwachira/docker
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.dockge.rule=Host(`dge.${DOMAIN}`)"
+  #     - "traefik.http.routers.dockge.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.dockge.loadbalancer.server.port=5001"
+
+  # jackett:
+  #   image: "lscr.io/linuxserver/jackett"
+  #   container_name: jackett
+  #   hostname: jackett.local
+  #   networks:
+  #     - download
+  #   environment:
+  #     - PUID=${ENV_PUID}
+  #     - PGID=${ENV_PGID}
+  #     - TZ=${TIMEZONE}
+  #   volumes:
+  #     - ${DOCKER_DIR}/download_stack/jackett:/config
+  #     - ${DOWNLOAD_DIR}:/downloads
+  #   ports:
+  #     - '8083:9117'
+  #   restart: unless-stopped
+
+  # postgres:
+  #   image: postgres:12
+  #   container_name: postgres
+  #   # hostname: postgres
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -d $${PG_DB} -U $${USER}"]
+  #     start_period: 20s
+  #     interval: 30s
+  #     retries: 5
+  #     timeout: 5s
+  #   volumes:
+  #     - ${DOCKER_DIR}/database_stack/postgres/db:/var/lib/postgresql/data
+  #   networks:
+  #     - database
+  #     # - proxy
+  #   # ports:
+  #   #   - "8093:80"
+  #   environment:
+  #     - POSTGRES_PASSWORD=${PG_PASS:?database password required}
+  #     - POSTGRES_USER=${USER}
+  #     - POSTGRES_DB=${PG_DB:-authentik}
+
+  # backup:
+  #   image: mazzolino/restic
+  #   container_name: restic
+  #   hostname: your_host_name
+  #   environment:
+  #     RUN_ON_STARTUP: "true" #change as you wish
+  #     BACKUP_CRON: "0 */12 * * *" #this is twice daily, i.e., every 12 hours
+  #     RESTIC_REPOSITORY: /restic
+  #     RESTIC_PASSWORD: MY_SUPER_LONG_PASSWORD
+  #     RESTIC_BACKUP_SOURCES: /mnt/volumes
+  #     RESTIC_COMPRESSION: auto 
+  #     RESTIC_BACKUP_ARGS: >-
+  #       --tag restic-proxmox #add tags, whatever you need to mark backups
+  #       --verbose
+  #     RESTIC_FORGET_ARGS: >- #change as required
+  #       --keep-last 10
+  #       --keep-daily 7
+  #       --keep-weekly 5
+  #       --keep-monthly 12
+  #     TZ: Europe/London
+  #   volumes:
+  #     - /home/ubuntu/truenas/Restic-Proxmox-Backup:/restic #change the left hand side to where you want to store the backups. As you can see I'm storing it on my NAS that is mounted to the host /home/truenas
+  #     - /home/ubuntu/truenas/Restic-Proxmox-Backup/tmp-for-restore:/tmp-for-restore #USE THIS FOLDER FOR RESTORE - CAN VIEW EACH CONTAINER
+  #     - /home/ubuntu/docker:/mnt/volumes:ro
+  #   security_opt:
+  #     - no-new-privileges:true
+
+  # prune:
+  #   image: mazzolino/restic
+  #   container_name: restic-prune
+  #   hostname: your_host_name
+  #   environment:
+  #     RUN_ON_STARTUP: "true"
+  #     PRUNE_CRON: "0 0 4 * * *"
+  #     RESTIC_REPOSITORY: /restic
+  #     RESTIC_PASSWORD: USE_SAME_PASSWORD_AS_ABOVE
+  #     TZ: Europe/London
+  #   security_opt:
+  #     - no-new-privileges:true
+
+  # check:
+  #   image: mazzolino/restic
+  #   container_name: restic-check
+  #   hostname: your_host_name
+  #   environment:
+  #     RUN_ON_STARTUP: "false"
+  #     CHECK_CRON: "0 15 5 * * *"
+  #     RESTIC_CHECK_ARGS: >-
+  #       --read-data-subset=10%
+  #     RESTIC_REPOSITORY: /restic
+  #     RESTIC_PASSWORD: USE_SAME_PASSWORD_AS_ABOVE
+  #     TZ: Europe/London
+  #   security_opt:
+  #     - no-new-privileges:true
+
+
+#                 Erpnext Stack                     #              
 #####################################################
  
   # erpnext-backend:
@@ -1245,125 +1375,4 @@ services:
   #   volumes:
   #     - sites:/home/frappe/frappe-bench/sites
   #     - ${DOCKER_DIR}/finance_stack/erpnext/logs:/home/frappe/frappe-bench/logs
-
-#####################################################
-#                   Backup Stack                    #              
-#####################################################
-
-  # backup:
-  #   image: mazzolino/restic
-  #   container_name: restic
-  #   hostname: your_host_name
-  #   environment:
-  #     RUN_ON_STARTUP: "true" #change as you wish
-  #     BACKUP_CRON: "0 */12 * * *" #this is twice daily, i.e., every 12 hours
-  #     RESTIC_REPOSITORY: /restic
-  #     RESTIC_PASSWORD: MY_SUPER_LONG_PASSWORD
-  #     RESTIC_BACKUP_SOURCES: /mnt/volumes
-  #     RESTIC_COMPRESSION: auto 
-  #     RESTIC_BACKUP_ARGS: >-
-  #       --tag restic-proxmox #add tags, whatever you need to mark backups
-  #       --verbose
-  #     RESTIC_FORGET_ARGS: >- #change as required
-  #       --keep-last 10
-  #       --keep-daily 7
-  #       --keep-weekly 5
-  #       --keep-monthly 12
-  #     TZ: Europe/London
-  #   volumes:
-  #     - /home/ubuntu/truenas/Restic-Proxmox-Backup:/restic #change the left hand side to where you want to store the backups. As you can see I'm storing it on my NAS that is mounted to the host /home/truenas
-  #     - /home/ubuntu/truenas/Restic-Proxmox-Backup/tmp-for-restore:/tmp-for-restore #USE THIS FOLDER FOR RESTORE - CAN VIEW EACH CONTAINER
-  #     - /home/ubuntu/docker:/mnt/volumes:ro
-  #   security_opt:
-  #     - no-new-privileges:true
-
-  # prune:
-  #   image: mazzolino/restic
-  #   container_name: restic-prune
-  #   hostname: your_host_name
-  #   environment:
-  #     RUN_ON_STARTUP: "true"
-  #     PRUNE_CRON: "0 0 4 * * *"
-  #     RESTIC_REPOSITORY: /restic
-  #     RESTIC_PASSWORD: USE_SAME_PASSWORD_AS_ABOVE
-  #     TZ: Europe/London
-  #   security_opt:
-  #     - no-new-privileges:true
-
-  # check:
-  #   image: mazzolino/restic
-  #   container_name: restic-check
-  #   hostname: your_host_name
-  #   environment:
-  #     RUN_ON_STARTUP: "false"
-  #     CHECK_CRON: "0 15 5 * * *"
-  #     RESTIC_CHECK_ARGS: >-
-  #       --read-data-subset=10%
-  #     RESTIC_REPOSITORY: /restic
-  #     RESTIC_PASSWORD: USE_SAME_PASSWORD_AS_ABOVE
-  #     TZ: Europe/London
-  #   security_opt:
-  #     - no-new-privileges:true
-
-  kopia:
-    image: kopia/kopia:latest
-    hostname: kopia
-    container_name: kopia
-    restart: unless-stopped
-    networks:
-      - proxy
-    # ports:
-    #     - 51515:51515
-    # Setup the server that provides the web gui
-    command:
-        - server
-        - start
-        - --disable-csrf-token-checks
-        - --insecure
-        - --address=0.0.0.0:51515
-        - --server-username=mdwachira
-        - --server-password=P@s5w04d
-    environment:
-        # Set repository password
-        KOPIA_PASSWORD: "P@s5w04d"
-        USER: "mdwachira"
-    volumes:
-        # Mount local folders needed by kopia
-        - ${DOCKER_DIR}/backup_stack/kopia/config:/app/config
-        - ${DOCKER_DIR}/backup_stack/kopia/cache:/app/cache
-        - ${DOCKER_DIR}/backup_stack/kopia/logs:/app/logs
-        # Mount local folders to snapshot
-        - ${DOCKER_DIR}:/data:ro
-        # Mount repository location
-        - ${BACKUP_DIR}:/repository
-        # Mount path for browsing mounted snaphots
-        - /tmp:/tmp:shared
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.kopia.rule=Host(`bck.${DOMAIN}`)"
-      - "traefik.http.routers.kopia.tls.certresolver=letsencrypt"
-      - "traefik.http.services.kopia.loadbalancer.server.port=51515"
-
-  rclone:
-    image: rclone/rclone:latest
-    container_name: rclone
-    security_opt:
-      - no-new-privileges:true
-    restart: unless-stopped
-    command: rcd --rc-web-gui --rc-addr 0.0.0.0:5572 --rc-web-fetch-url=https://api.github.com/repos/rclone/rclone-webui-react/releases/latest --rc-web-gui-update --rc-user mdwachira --rc-pass x25dhPqai6Ha3msz -vv --checksum --transfers=4 --checkers=4 --contimeout=60s --timeout=300s --retries=3 --low-level-retries=10 --stats=1s --stats-file-name-length=0
-    #ports:
-    #  - "5572:5572" add this port if you're not using a proxy
-    volumes: #be sure to amend the below to your user and directories
-      - ${DOCKER_DIR}/backup_stack/rclone/config:/config/rclone #location of your rclone config file (i.e., where the remote and secrets are stored)
-      - ${DOCKER_DIR}/backup_stack/rclone/dashboard:/sync_script #script to allow remote execution of backups (e.g., rclone copy --checksum --verbose --transfers 1 --checkers 4 --contimeout 60s --timeout 300s --retries 3 --low-level-retries 10 --stats 1s /YOUR_FOLDER YOUR_REMOTE:REMOTE_FOLDER/sync_script)
-      - ${BACKUP_DIR}:/data #this is my truenas SMB share - change to wherever you store the data you wish to upload
-    environment:
-      - PHP_TZ=${TIMEZONE}
-    networks:
-      proxy: #remove the proxy network if you're not using traefik
-    labels: #remove the labels section if you're not using traefik
-      - "traefik.enable=true"
-      - "traefik.http.routers.rclone.rule=Host(`cln.${DOMAIN}`)"
-      - "traefik.http.routers.rclone.tls.certresolver=letsencrypt"
-      - "traefik.http.services.rclone.loadbalancer.server.port=5572"
 
