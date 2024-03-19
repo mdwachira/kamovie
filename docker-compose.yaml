@@ -121,30 +121,30 @@ services:
       - "traefik.http.services.code-server.loadbalancer.server.port=8443"
     restart: unless-stopped
 
-  jfa_go:
-    image: "docker.io/hrfee/jfa-go"
-    restart: unless-stopped
-    container_name: jfa_go
-    hostname: jfa_go
-    depends_on:
-      - traefik
-    environment:
-      - PUID=${ENV_PUID}
-      - PGID=${ENV_PGID}
-      - TZ=${TIMEZONE}
-    networks:
-      - streaming
-      - proxy
-    # ports:
-    #   - '8189:8056'
-    volumes:
-      - ${DOCKER_DIR}/admin_stack/jfa_go:/data
-      - ${DOCKER_DIR}/streaming_stack/jellyfin/config:/jf
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.jfa-go.rule=Host(`auth.${DOMAIN}`)"
-      - "traefik.http.routers.jfa-go.tls.certresolver=letsencrypt"
-      - "traefik.http.services.jfa-go.loadbalancer.server.port=8056"
+  # jfa_go:
+  #   image: "docker.io/hrfee/jfa-go"
+  #   restart: unless-stopped
+  #   container_name: jfa_go
+  #   hostname: jfa_go
+  #   depends_on:
+  #     - traefik
+  #   environment:
+  #     - PUID=${ENV_PUID}
+  #     - PGID=${ENV_PGID}
+  #     - TZ=${TIMEZONE}
+  #   networks:
+  #     - streaming
+  #     - proxy
+  #   # ports:
+  #   #   - '8189:8056'
+  #   volumes:
+  #     - ${DOCKER_DIR}/admin_stack/jfa_go:/data
+  #     - ${DOCKER_DIR}/streaming_stack/jellyfin/config:/jf
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.jfa-go.rule=Host(`auth.${DOMAIN}`)"
+  #     - "traefik.http.routers.jfa-go.tls.certresolver=letsencrypt"
+  #     - "traefik.http.services.jfa-go.loadbalancer.server.port=8056"
 
   wizarr-plex:
     container_name: wizarr-plex
@@ -164,7 +164,7 @@ services:
       - 'traefik.http.routers.wizarr-plex.tls.certresolver=letsencrypt'
       - "traefik.http.services.wizarr-plex.loadbalancer.server.port=5690"
     environment:
-      - APP_URL=https://wizarr.${DOMAIN} #URL at which you will access and share 
+      - APP_URL=https://wpx.${DOMAIN} #URL at which you will access and share 
       - MIN_PASSWORD_LENGTH=8 # Minimum password length required for new users (default: 8)
       - MAX_PASSWORD_LENGTH=20 # Maximum password length for new users (default: 20)
       - MIN_PASSWORD_UPPERCASE=1 # Minimum password chars that are uppercase (default: 1)
@@ -191,7 +191,7 @@ services:
       - 'traefik.http.routers.wizarr-jellyfin.tls.certresolver=letsencrypt'
       - "traefik.http.services.wizarr-jellyfin.loadbalancer.server.port=5690"
     environment:
-      - APP_URL=https://wizarr.${DOMAIN} #URL at which you will access and share 
+      - APP_URL=https://wjf.${DOMAIN} #URL at which you will access and share 
       - MIN_PASSWORD_LENGTH=8 # Minimum password length required for new users (default: 8)
       - MAX_PASSWORD_LENGTH=20 # Maximum password length for new users (default: 20)
       - MIN_PASSWORD_UPPERCASE=1 # Minimum password chars that are uppercase (default: 1)
@@ -336,12 +336,12 @@ services:
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
       # - "traefik.http.routers.traefik.entrypoints=websecure"
       - "traefik.http.routers.traefik.service=api@internal"
-      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"      
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
       # - "traefik.http.routers.traefik.middlewares=traefik-auth"
       # - "traefik.http.middlewares.test-auth.basicauth.usersfile=/path/to/my/usersfile"
 
   crowdsec:
-    image: crowdsecurity/crowdsec:slim
+    image: "crowdsecurity/crowdsec:latest"
     container_name: crowdsec
     environment:
       - 'GID=${ENV_PGID}'
@@ -358,7 +358,7 @@ services:
     restart: unless-stopped
 
   crowdsec_bouncer:
-    image: docker.io/fbonalair/traefik-crowdsec-bouncer
+    image: "docker.io/fbonalair/traefik-crowdsec-bouncer"
     restart: unless-stopped
     container_name: crowdsec_bouncer
     environment:
@@ -432,9 +432,9 @@ services:
     depends_on:
       - postgres
       - authentik-cache
-  
+
   authentik-cache:
-    image: docker.io/library/redis:alpine
+    image: "docker.io/library/redis:alpine"
     container_name: authentik-cache
     command: --save 60 1 --loglevel warning
     restart: unless-stopped
@@ -455,7 +455,7 @@ services:
 #####################################################
 
   postgres:
-    image: postgres:14
+    image: "postgres:14"
     container_name: postgres
     hostname: postgres
     restart: unless-stopped
@@ -505,7 +505,7 @@ services:
       - "traefik.http.routers.pgadmin.tls.certresolver=letsencrypt"
 
   mariadb:
-    image: mariadb:10.6
+    image: "mariadb:10.6"
     container_name: mariadb
     hostname: mariadb
     healthcheck:
@@ -529,7 +529,7 @@ services:
       - ${DOCKER_DIR}/database_stack/mariadb/db:/var/lib/mysql
 
   phpmyadmin:
-    image: phpmyadmin
+    image: "phpmyadmin"
     container_name: phpmyadmin
     restart: always
     networks:
@@ -1019,7 +1019,7 @@ services:
 #####################################################
 #                   Archive                         #              
 #####################################################
-      
+
   # authelia:
   #   image: 'authelia/authelia'
   #   container_name: authelia
@@ -1173,7 +1173,7 @@ services:
 
 #                 Erpnext Stack                     #              
 #####################################################
- 
+
   # erpnext-backend:
   #   image: frappe/erpnext:${ERPNEXT_VERSION}
   #   container_name: erpnext-backend
